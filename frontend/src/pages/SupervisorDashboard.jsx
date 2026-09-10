@@ -15,11 +15,13 @@ export default function SupervisorDashboard() {
       <Navbar />
       <main className="dashboard">
         <h1>Supervisor Dashboard</h1>
-        <p>{data ? data.message : 'Loading…'}</p>
-        <p className="placeholder-note">
-          This is the Sprint 1 placeholder dashboard. Widgets for this role
-          are built in later sprints per the project Sprint plan.
-        </p>
+        <p className="dashboard-subtitle">{data ? data.message : 'Loading…'}</p>
+        <div className="card">
+          <p className="placeholder-note" style={{ margin: 0 }}>
+            This dashboard will show real widgets once later sprints add training
+            data to report on.
+          </p>
+        </div>
       </main>
     </div>
   );

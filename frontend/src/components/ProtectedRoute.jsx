@@ -13,7 +13,6 @@ export default function ProtectedRoute({ children, allowedRoles }) {
   const { user, loading } = useAuth();
 
   if (loading) return <div className="page-center">Loading…</div>;
-
   if (!user) return <Navigate to="/login" replace />;
 
   if (allowedRoles && !allowedRoles.includes(user.role) && user.role !== 'administrator') {

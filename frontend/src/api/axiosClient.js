@@ -18,7 +18,9 @@ axiosClient.interceptors.response.use(
     if (error.response && [401, 403].includes(error.response.status)) {
       localStorage.removeItem('safestack_token');
       localStorage.removeItem('safestack_user');
-      window.location.href = '/login';
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

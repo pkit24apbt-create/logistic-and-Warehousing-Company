@@ -1,9 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
-
-import Welcome from './pages/Welcome';
+import AdminUsers from './pages/AdminUsers';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
+import Setup from './pages/Setup';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 import TrainerDashboard from './pages/TrainerDashboard';
 import SupervisorDashboard from './pages/SupervisorDashboard';
@@ -14,8 +15,9 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Welcome />} />
+          <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/setup" element={<Setup />} />
 
           <Route
             path="/dashboard/employee"
@@ -49,6 +51,14 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/admin/users"
+            element={
+              <ProtectedRoute allowedRoles={['administrator']}>
+                <AdminUsers />
+              </ProtectedRoute>
+            }
+         />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
