@@ -13,6 +13,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showForgotHelp, setShowForgotHelp] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -53,10 +54,11 @@ export default function Login() {
         </div>
 
         <div className="auth-side-features">
-          <div className="auth-side-feature"><span className="auth-side-feature-icon">🎯</span> Guided training modules</div>
-          <div className="auth-side-feature"><span className="auth-side-feature-icon">🧭</span> Hazard awareness scenarios</div>
-          <div className="auth-side-feature"><span className="auth-side-feature-icon">📜</span> Certificates &amp; compliance tracking</div>
+          <div className="auth-side-feature"><span className="auth-side-feature-icon"><span className="icon-mask icon-target" /></span> Guided training modules</div>
+          <div className="auth-side-feature"><span className="auth-side-feature-icon"><span className="icon-mask icon-compass" /></span> Hazard awareness scenarios</div>
+          <div className="auth-side-feature"><span className="auth-side-feature-icon"><span className="icon-mask icon-certificate" /></span> Certificates &amp; compliance tracking</div>
         </div>
+
         <img
           src="/assets/auth-illustration.svg"
           alt=""
@@ -66,6 +68,7 @@ export default function Login() {
 
       <div className="auth-panel">
         <div className="auth-card">
+          <span className="icon-mask icon-trust auth-trust-badge" />
           <h2>Welcome back</h2>
           <p className="auth-subtitle">Sign in with your work email to continue.</p>
 
@@ -98,6 +101,18 @@ export default function Login() {
                   {showPassword ? 'HIDE' : 'SHOW'}
                 </button>
               </div>
+              <button
+                type="button"
+                onClick={() => setShowForgotHelp((s) => !s)}
+                style={{ background: 'none', border: 'none', color: 'var(--primary-dark)', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', padding: '8px 0 0', fontFamily: 'inherit' }}
+              >
+                Forgot your password?
+              </button>
+              {showForgotHelp && (
+                <p style={{ fontSize: 12.5, color: 'var(--text-600)', background: 'var(--bg)', padding: '10px 12px', borderRadius: 8, marginTop: 6 }}>
+                  Passwords can only be reset by your Administrator, not through this page. Contact them and they'll issue you a new one-time password.
+                </p>
+              )}
             </div>
 
             {error && <p className="auth-error">{error}</p>}

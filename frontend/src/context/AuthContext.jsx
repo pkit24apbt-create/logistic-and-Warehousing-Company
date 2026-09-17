@@ -37,8 +37,20 @@ export function AuthProvider({ children }) {
     setUser(null);
   }
 
+  // Called right after a successful password change, so the app immediately
+  // knows the user no longer needs to be forced through that screen again —
+  // without requiring a full page reload or a second network round trip.
+  function clearMustChangePassword() {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, mustChangePassword: false };
+      localStorage.setItem('safestack_user', JSON.stringify(updated));
+      return updated;
+    });
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, clearMustChangePassword }}>
       {children}
     </AuthContext.Provider>
   );

@@ -36,19 +36,19 @@ export default function Landing() {
 
           <div className="landing-feature-row">
             <div className="landing-feature landing-feature-light">
-              <div className="landing-feature-icon">🎯</div>
+              <div className="landing-feature-icon"><img src="/assets/icons/icon-target.svg" alt="" /></div>
               <div className="landing-feature-label landing-feature-label-light">Guided Training Modules</div>
             </div>
             <div className="landing-feature landing-feature-light">
-              <div className="landing-feature-icon">🧭</div>
+              <div className="landing-feature-icon"><img src="/assets/icons/icon-compass.svg" alt="" /></div>
               <div className="landing-feature-label landing-feature-label-light">Hazard Awareness Scenarios</div>
             </div>
             <div className="landing-feature landing-feature-light">
-              <div className="landing-feature-icon">📜</div>
+              <div className="landing-feature-icon"><img src="/assets/icons/icon-certificate.svg" alt="" /></div>
               <div className="landing-feature-label landing-feature-label-light">Certificates &amp; Compliance</div>
             </div>
             <div className="landing-feature landing-feature-light">
-              <div className="landing-feature-icon">📊</div>
+              <div className="landing-feature-icon"><img src="/assets/icons/icon-chart.svg" alt="" /></div>
               <div className="landing-feature-label landing-feature-label-light">Progress Dashboards</div>
             </div>
           </div>

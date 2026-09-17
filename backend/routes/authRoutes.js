@@ -7,6 +7,22 @@ const { verifyToken } = require('../middleware/authMiddleware');
 const router = express.Router();
 const SALT_ROUNDS = 10;
 
+// ============================================================
+// SECURITY MODEL FOR THIS PROJECT
+// ============================================================
+// 1. There is NO public self-registration. Nobody can sign themselves up.
+// 2. The FIRST account in the system must be an Administrator, created
+//    through the one-time /setup endpoint below. It only works while the
+//    users table is completely empty, and it locks itself permanently the
+//    moment one account exists.
+// 3. Every account after that (Employee, Trainer, Supervisor, or another
+//    Administrator) is created by an existing Administrator, from inside
+//    the Admin > Users & Roles panel, which calls POST /api/admin/users —
+//    never a public route.
+// 4. The login page itself never displays or hints at what roles exist.
+// ============================================================
+
+// POST /api/auth/setup
 router.post('/setup', async (req, res) => {
   const { fullName, email, password } = req.body;
 
@@ -48,6 +64,7 @@ router.post('/setup', async (req, res) => {
   }
 });
 
+// GET /api/auth/setup-status
 router.get('/setup-status', async (req, res) => {
   try {
     const result = await query('SELECT COUNT(*)::int AS count FROM users');
@@ -58,6 +75,7 @@ router.get('/setup-status', async (req, res) => {
   }
 });
 
+// POST /api/auth/login
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
@@ -67,7 +85,7 @@ router.post('/login', async (req, res) => {
 
   try {
     const result = await query(
-      `SELECT u.user_id, u.full_name, u.email, u.password_hash, u.status, r.role_name
+      `SELECT u.user_id, u.full_name, u.email, u.password_hash, u.status, u.must_change_password, r.role_name
        FROM users u JOIN roles r ON r.role_id = u.role_id
        WHERE u.email = $1`,
       [email]
@@ -96,7 +114,13 @@ router.post('/login', async (req, res) => {
 
     res.json({
       token,
-      user: { userId: user.user_id, fullName: user.full_name, email: user.email, role: user.role_name },
+      user: {
+        userId: user.user_id,
+        fullName: user.full_name,
+        email: user.email,
+        role: user.role_name,
+        mustChangePassword: user.must_change_password,
+      },
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -104,14 +128,55 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// POST /api/auth/change-password
+// Any logged-in user can change their own password. If they were issued a
+// one-time temporary password by an Administrator, this is how they set
+// their own real password — and it clears the "must change" flag so they
+// are never forced through this again until an admin resets them.
+router.post('/change-password', verifyToken, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'Current password and new password are required.' });
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: 'New password must be at least 8 characters.' });
+  }
+
+  try {
+    const result = await query('SELECT password_hash FROM users WHERE user_id = $1', [req.user.userId]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const matches = await bcrypt.compare(currentPassword, result.rows[0].password_hash);
+    if (!matches) {
+      return res.status(401).json({ error: 'Current password is incorrect.' });
+    }
+
+    const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await query(
+      'UPDATE users SET password_hash = $1, must_change_password = FALSE WHERE user_id = $2',
+      [newHash, req.user.userId]
+    );
+
+    res.json({ message: 'Password updated successfully.' });
+  } catch (err) {
+    console.error('Change password error:', err);
+    res.status(500).json({ error: 'Something went wrong changing your password.' });
+  }
+});
+
+// POST /api/auth/logout
 router.post('/logout', verifyToken, (req, res) => {
   res.json({ message: 'Logged out.' });
 });
 
+// GET /api/auth/me
 router.get('/me', verifyToken, async (req, res) => {
   try {
     const result = await query(
-      `SELECT u.user_id, u.full_name, u.email, u.department, r.role_name
+      `SELECT u.user_id, u.full_name, u.email, u.department, u.must_change_password, r.role_name
        FROM users u JOIN roles r ON r.role_id = u.role_id
        WHERE u.user_id = $1`,
       [req.user.userId]
@@ -119,7 +184,19 @@ router.get('/me', verifyToken, async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found.' });
     }
-    res.json({ user: result.rows[0] });
+    const u = result.rows[0];
+    // Same field names as /login's user object (camelCase) so the frontend
+    // gets a consistent shape whether it just logged in or refreshed the page.
+    res.json({
+      user: {
+        userId: u.user_id,
+        fullName: u.full_name,
+        email: u.email,
+        department: u.department,
+        role: u.role_name,
+        mustChangePassword: u.must_change_password,
+      },
+    });
   } catch (err) {
     console.error('/me error:', err);
     res.status(500).json({ error: 'Something went wrong.' });

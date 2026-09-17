@@ -1,0 +1,197 @@
+import { useEffect, useRef, useState } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import Navbar from '../components/Navbar';
+import axiosClient from '../api/axiosClient';
+
+function formatTime(totalSeconds) {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+export default function QuizPage() {
+  const { id: moduleId } = useParams();
+  const [quiz, setQuiz] = useState(null);
+  const [answers, setAnswers] = useState({});
+  const [result, setResult] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(null);
+  const [timedOut, setTimedOut] = useState(false);
+
+  // Keep the latest answers/submitting-state available inside the interval
+  // callback without needing to restart the timer every time they change.
+  const answersRef = useRef(answers);
+  answersRef.current = answers;
+  const submittingRef = useRef(submitting);
+  submittingRef.current = submitting;
+
+  useEffect(() => {
+    axiosClient.get(`/quiz/module/${moduleId}`).then((res) => {
+      setQuiz(res.data);
+      setSecondsLeft(res.data.time_limit_sec);
+    });
+  }, [moduleId]);
+
+  useEffect(() => {
+    if (secondsLeft === null || result) return;
+
+    const interval = setInterval(() => {
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          if (!submittingRef.current) {
+            setTimedOut(true);
+            submit(true);
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [secondsLeft === null, result]);
+
+  function selectOption(questionId, optionId, type) {
+    setAnswers((prev) => {
+      const current = prev[questionId] || [];
+      if (type === 'multiple') {
+        const next = current.includes(optionId) ? current.filter((o) => o !== optionId) : [...current, optionId];
+        return { ...prev, [questionId]: next };
+      }
+      return { ...prev, [questionId]: [optionId] };
+    });
+  }
+
+  async function submit(auto = false) {
+    if (submittingRef.current) return;
+    setSubmitting(true);
+    try {
+      const res = await axiosClient.post(`/quiz/${quiz.quiz_id}/submit`, { answers: answersRef.current });
+      setResult(res.data);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function retake() {
+    setResult(null);
+    setAnswers({});
+    setTimedOut(false);
+    setSecondsLeft(quiz.time_limit_sec);
+  }
+
+  if (!quiz) return <div><Navbar /><main className="dashboard">Loading quiz…</main></div>;
+
+  const isLowTime = secondsLeft !== null && secondsLeft <= 60;
+
+  return (
+    <div>
+      <Navbar />
+      <main className="dashboard">
+        <Link to={`/modules/${moduleId}`} style={{ fontSize: 13 }}>&larr; Back to module</Link>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 10, flexWrap: 'wrap', gap: 10 }}>
+          <div>
+            <h1 style={{ margin: 0 }}>Knowledge Check</h1>
+            <p className="dashboard-subtitle" style={{ margin: '6px 0 0' }}>Pass mark: {quiz.passing_score}%</p>
+          </div>
+          {!result && secondsLeft !== null && (
+            <div
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 999,
+                background: isLowTime ? '#FEE2E2' : 'var(--primary-light)',
+                color: isLowTime ? '#DC2626' : 'var(--primary-dark)',
+                fontWeight: 800, fontSize: 15, fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              <span className="icon-mask icon-timer" style={{ width: 16, height: 16 }} />
+              {formatTime(secondsLeft)}
+            </div>
+          )}
+        </div>
+
+        {!result && (
+          <div className="card" style={{ maxWidth: 640, marginTop: 16 }}>
+            {timedOut && (
+              <p className="auth-error">Time's up — your answers were submitted automatically.</p>
+            )}
+            {quiz.questions.map((q, idx) => (
+              <div key={q.question_id} style={{ marginBottom: 22 }}>
+                <h3 style={{ marginBottom: 10 }}>{idx + 1}. {q.question_text}</h3>
+                {q.options.map((o) => {
+                  const checked = (answers[q.question_id] || []).includes(o.option_id);
+                  return (
+                    <label
+                      key={o.option_id}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                        border: '1.5px solid var(--border)', borderRadius: 8, marginBottom: 8, cursor: 'pointer',
+                        background: checked ? 'var(--primary-light)' : '#fff',
+                      }}
+                    >
+                      <input
+                        type={q.question_type === 'multiple' ? 'checkbox' : 'radio'}
+                        name={`q-${q.question_id}`}
+                        checked={checked}
+                        onChange={() => selectOption(q.question_id, o.option_id, q.question_type)}
+                      />
+                      {o.option_text}
+                    </label>
+                  );
+                })}
+              </div>
+            ))}
+            <button className="auth-btn-primary" style={{ width: 'auto', padding: '12px 28px' }} onClick={() => submit(false)} disabled={submitting}>
+              {submitting ? 'Submitting…' : 'Submit Answers'}
+            </button>
+          </div>
+        )}
+
+        {result && (
+          <div className="card" style={{ maxWidth: 640, marginTop: 16 }}>
+            <h2 style={{ color: result.passed ? '#16A34A' : '#DC2626', margin: 0 }}>
+              {result.passed ? 'Passed' : 'Not yet passed'}
+            </h2>
+            <p style={{ fontSize: 40, fontWeight: 800, color: result.passed ? '#16A34A' : '#DC2626', margin: '4px 0' }}>
+              {result.score}%
+            </p>
+            <p className="dashboard-subtitle">{result.correctCount} of {result.total} correct · Pass mark {result.passingScore}%</p>
+
+            {quiz.questions.map((q) => {
+              const fb = result.feedback.find((f) => f.questionId === q.question_id);
+              return (
+                <div key={q.question_id} style={{ marginBottom: 18 }}>
+                  <h3 style={{ fontSize: 14.5, marginBottom: 8 }}>{q.question_text}</h3>
+                  {q.options.map((o) => {
+                    const isCorrectOption = fb?.correctOptionIds.includes(o.option_id);
+                    const wasSelected = (answers[q.question_id] || []).includes(o.option_id);
+                    let bg = '#fff', border = 'var(--border)';
+                    if (isCorrectOption) { bg = '#DCFCE7'; border = '#16A34A'; }
+                    else if (wasSelected) { bg = '#FEE2E2'; border = '#DC2626'; }
+                    return (
+                      <div key={o.option_id} style={{ padding: '9px 12px', border: `1.5px solid ${border}`, background: bg, borderRadius: 8, marginBottom: 6, fontSize: 13.5 }}>
+                        {o.option_text}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+              <Link to={`/modules/${moduleId}`} style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 20px', fontSize: 13.5, color: 'var(--text-900)', textDecoration: 'none' }}>
+                Back to Module
+              </Link>
+              {!result.passed && (
+                <button className="auth-btn-primary" style={{ width: 'auto', padding: '10px 24px' }} onClick={retake}>
+                  Retake Quiz
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}

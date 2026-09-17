@@ -1,6 +1,12 @@
 const jwt = require('jsonwebtoken');
 
 function verifyToken(req, res, next) {
+  // Browsers send an OPTIONS "preflight" request before certain real
+  // requests (like our POST/PATCH calls with an Authorization header).
+  // Preflight requests never carry a token, so we must let them through
+  // here — otherwise every protected route incorrectly rejects its own
+  // preflight check with 401, which the browser then reports as a CORS
+  // error even though the real request would have worked fine.
   if (req.method === 'OPTIONS') {
     return next();
   }

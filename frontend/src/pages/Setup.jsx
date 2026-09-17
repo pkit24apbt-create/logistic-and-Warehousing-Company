@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
 
 export default function Setup() {
-  const [status, setStatus] = useState('checking');
+  const [status, setStatus] = useState('checking'); // checking | needed | done | already-done
   const [form, setForm] = useState({ fullName: '', email: '', password: '', confirmPassword: '' });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -62,10 +62,11 @@ export default function Setup() {
         </div>
 
         <div className="auth-side-features">
-          <div className="auth-side-feature"><span className="auth-side-feature-icon">🔒</span> No public registration</div>
-          <div className="auth-side-feature"><span className="auth-side-feature-icon">👤</span> Admin creates every account</div>
-          <div className="auth-side-feature"><span className="auth-side-feature-icon">⏱</span> This form only works once</div>
+          <div className="auth-side-feature"><span className="auth-side-feature-icon"><img src="/assets/icons/icon-lock.svg" alt="" /></span> No public registration</div>
+          <div className="auth-side-feature"><span className="auth-side-feature-icon"><img src="/assets/icons/icon-person.svg" alt="" /></span> Admin creates every account</div>
+          <div className="auth-side-feature"><span className="auth-side-feature-icon"><img src="/assets/icons/icon-timer.svg" alt="" /></span> This form only works once</div>
         </div>
+
         <img
           src="/assets/auth-illustration.svg"
           alt=""
