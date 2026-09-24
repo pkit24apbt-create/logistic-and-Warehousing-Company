@@ -17,9 +17,8 @@ export default function QuizPage() {
   const [submitting, setSubmitting] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(null);
   const [timedOut, setTimedOut] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Keep the latest answers/submitting-state available inside the interval
-  // callback without needing to restart the timer every time they change.
   const answersRef = useRef(answers);
   answersRef.current = answers;
   const submittingRef = useRef(submitting);
@@ -79,12 +78,22 @@ export default function QuizPage() {
     setResult(null);
     setAnswers({});
     setTimedOut(false);
+    setCurrentIndex(0);
     setSecondsLeft(quiz.time_limit_sec);
   }
 
   if (!quiz) return <div><Navbar /><main className="dashboard">Loading quiz…</main></div>;
 
   const isLowTime = secondsLeft !== null && secondsLeft <= 60;
+  const currentQuestion = quiz.questions[currentIndex];
+  const isFirst = currentIndex === 0;
+  const isLast = currentIndex === quiz.questions.length - 1;
+  const currentAnswered = (answers[currentQuestion?.question_id] || []).length > 0;
+
+  const difficultyStyle = (d) => ({
+    background: d === 'easy' ? '#DCFCE7' : d === 'hard' ? '#FEE2E2' : '#FEF3C7',
+    color: d === 'easy' ? '#16A34A' : d === 'hard' ? '#DC2626' : '#B45309',
+  });
 
   return (
     <div>
@@ -116,35 +125,91 @@ export default function QuizPage() {
             {timedOut && (
               <p className="auth-error">Time's up — your answers were submitted automatically.</p>
             )}
-            {quiz.questions.map((q, idx) => (
-              <div key={q.question_id} style={{ marginBottom: 22 }}>
-                <h3 style={{ marginBottom: 10 }}>{idx + 1}. {q.question_text}</h3>
-                {q.options.map((o) => {
-                  const checked = (answers[q.question_id] || []).includes(o.option_id);
-                  return (
-                    <label
-                      key={o.option_id}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
-                        border: '1.5px solid var(--border)', borderRadius: 8, marginBottom: 8, cursor: 'pointer',
-                        background: checked ? 'var(--primary-light)' : '#fff',
-                      }}
-                    >
-                      <input
-                        type={q.question_type === 'multiple' ? 'checkbox' : 'radio'}
-                        name={`q-${q.question_id}`}
-                        checked={checked}
-                        onChange={() => selectOption(q.question_id, o.option_id, q.question_type)}
-                      />
-                      {o.option_text}
-                    </label>
-                  );
-                })}
-              </div>
-            ))}
-            <button className="auth-btn-primary" style={{ width: 'auto', padding: '12px 28px' }} onClick={() => submit(false)} disabled={submitting}>
-              {submitting ? 'Submitting…' : 'Submit Answers'}
-            </button>
+
+            <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+              {quiz.questions.map((_, i) => (
+                <div
+                  key={i}
+                  style={{
+                    flex: 1, height: 6, borderRadius: 999,
+                    background: i < currentIndex ? 'var(--primary)' : i === currentIndex ? 'var(--accent)' : 'var(--border)',
+                  }}
+                />
+              ))}
+            </div>
+            <p className="dashboard-subtitle" style={{ margin: '0 0 16px', fontWeight: 700 }}>
+              Question {currentIndex + 1} of {quiz.questions.length}
+            </p>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <h3 style={{ margin: 0 }}>{currentQuestion.question_text}</h3>
+              {currentQuestion.difficulty && (
+                <span className="role-pill" style={{ ...difficultyStyle(currentQuestion.difficulty), flex: 'none' }}>
+                  {currentQuestion.difficulty}
+                </span>
+              )}
+            </div>
+
+            {currentQuestion.options.map((o) => {
+              const checked = (answers[currentQuestion.question_id] || []).includes(o.option_id);
+              return (
+                <label
+                  key={o.option_id}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px',
+                    border: '1.5px solid var(--border)', borderRadius: 8, marginBottom: 8, cursor: 'pointer',
+                    background: checked ? 'var(--primary-light)' : '#fff',
+                  }}
+                >
+                  <input
+                    type={currentQuestion.question_type === 'multiple' ? 'checkbox' : 'radio'}
+                    name={`q-${currentQuestion.question_id}`}
+                    checked={checked}
+                    onChange={() => selectOption(currentQuestion.question_id, o.option_id, currentQuestion.question_type)}
+                  />
+                  {o.option_text}
+                </label>
+              );
+            })}
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20 }}>
+              <button
+                type="button"
+                onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
+                disabled={isFirst}
+                style={{
+                  background: 'transparent', border: '1px solid var(--border)', borderRadius: 8,
+                  padding: '10px 20px', fontSize: 13.5, cursor: isFirst ? 'not-allowed' : 'pointer',
+                  fontFamily: 'inherit', opacity: isFirst ? 0.5 : 1,
+                }}
+              >
+                &larr; Previous
+              </button>
+
+              {!isLast && (
+                <button
+                  type="button"
+                  onClick={() => setCurrentIndex((i) => Math.min(quiz.questions.length - 1, i + 1))}
+                  disabled={!currentAnswered}
+                  className="auth-btn-primary"
+                  style={{ width: 'auto', padding: '10px 24px', opacity: currentAnswered ? 1 : 0.5 }}
+                >
+                  Next &rarr;
+                </button>
+              )}
+
+              {isLast && (
+                <button
+                  type="button"
+                  onClick={() => submit(false)}
+                  disabled={!currentAnswered || submitting}
+                  className="auth-btn-primary"
+                  style={{ width: 'auto', padding: '10px 24px' }}
+                >
+                  {submitting ? 'Submitting…' : 'Submit Answers'}
+                </button>
+              )}
+            </div>
           </div>
         )}
 

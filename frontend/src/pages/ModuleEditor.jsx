@@ -4,7 +4,7 @@ import Navbar from '../components/Navbar';
 import axiosClient from '../api/axiosClient';
 import { useAuth } from '../context/AuthContext';
 
-const emptyQuestion = () => ({ text: '', type: 'single', options: [{ text: '', isCorrect: true }, { text: '', isCorrect: false }] });
+const emptyQuestion = () => ({ text: '', type: 'single', difficulty: 'medium', options: [{ text: '', isCorrect: true }, { text: '', isCorrect: false }] });
 
 export default function ModuleEditor() {
   const { id } = useParams();
@@ -13,10 +13,6 @@ export default function ModuleEditor() {
   const isNew = !id;
   const isAdmin = user.role === 'administrator';
 
-  // Trainers can no longer create modules or edit content — only build the
-  // quiz and hazard puzzle for modules an Administrator has assigned to
-  // them. So Trainers default straight to the Quiz tab, and see content
-  // read-only for context rather than as an editable form.
   const [tab, setTab] = useState(isAdmin ? 'content' : 'quiz');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -31,6 +27,9 @@ export default function ModuleEditor() {
   const [hazardHotspots, setHazardHotspots] = useState([]);
   const [hazardLoaded, setHazardLoaded] = useState(false);
   const hazardImageRef = useRef(null);
+
+  const [employees, setEmployees] = useState([]);
+  const [employeesLoaded, setEmployeesLoaded] = useState(false);
 
   useEffect(() => {
     if (isAdmin) {
@@ -62,6 +61,14 @@ export default function ModuleEditor() {
       setHazardLoaded(true);
     });
   }, [tab, isNew, id, hazardLoaded]);
+
+  useEffect(() => {
+    if (isNew || tab !== 'employees' || employeesLoaded) return;
+    axiosClient.get(`/training/${id}/employees`).then((res) => {
+      setEmployees(res.data);
+      setEmployeesLoaded(true);
+    });
+  }, [tab, isNew, id, employeesLoaded]);
 
   async function saveContent(e) {
     e.preventDefault();
@@ -207,6 +214,7 @@ export default function ModuleEditor() {
             {tabBtn('content', isAdmin ? 'Content' : 'Content (view only)')}
             {tabBtn('quiz', 'Quiz Builder')}
             {tabBtn('hazard', 'Hazard Puzzle')}
+            {tabBtn('employees', 'Assigned Employees')}
           </div>
         )}
 
@@ -323,9 +331,23 @@ export default function ModuleEditor() {
 
             {questions.map((q, qi) => (
               <div key={qi} style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, padding: 16, marginBottom: 12 }}>
-                <div className="auth-field">
-                  <label>Question {qi + 1}</label>
-                  <input value={q.text} onChange={(e) => updateQuestion(qi, { text: e.target.value })} required />
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 4 }}>
+                  <div className="auth-field" style={{ flex: 1, marginBottom: 14 }}>
+                    <label>Question {qi + 1}</label>
+                    <input value={q.text} onChange={(e) => updateQuestion(qi, { text: e.target.value })} required />
+                  </div>
+                  <div className="auth-field" style={{ width: 140, marginBottom: 14 }}>
+                    <label>Difficulty</label>
+                    <select
+                      value={q.difficulty || 'medium'}
+                      onChange={(e) => updateQuestion(qi, { difficulty: e.target.value })}
+                      style={{ width: '100%', padding: '12px 14px', background: '#fff', border: '1.5px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 14, fontFamily: 'inherit' }}
+                    >
+                      <option value="easy">Easy</option>
+                      <option value="medium">Medium</option>
+                      <option value="hard">Hard</option>
+                    </select>
+                  </div>
                 </div>
                 {q.options.map((o, oi) => (
                   <div key={oi} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
@@ -458,6 +480,69 @@ export default function ModuleEditor() {
               Save Hazard Puzzle
             </button>
           </form>
+        )}
+
+        {tab === 'employees' && !isNew && (
+          <div className="card" style={{ maxWidth: 900 }}>
+            <h3 style={{ marginTop: 0 }}>Employees assigned to this module</h3>
+            <p className="dashboard-subtitle" style={{ margin: '0 0 16px' }}>
+              Shows each employee's best quiz score and hazard puzzle score for this module.
+            </p>
+
+            {employees.length === 0 && (
+              <p className="dashboard-subtitle">No employees are currently assigned to this module.</p>
+            )}
+
+            {employees.length > 0 && (
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Department</th>
+                    <th>Assigned</th>
+                    <th>Quiz</th>
+                    <th>Hazard Puzzle</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employees.map((e) => (
+                    <tr key={e.user_id}>
+                      <td>
+                        <div style={{ fontWeight: 700 }}>{e.full_name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-600)' }}>{e.email}</div>
+                      </td>
+                      <td>{e.department || '—'}</td>
+                      <td style={{ fontSize: 12.5 }}>
+                        {new Date(e.assigned_at).toLocaleDateString()}
+                        {e.assigned_by_name && <div style={{ color: 'var(--text-600)' }}>by {e.assigned_by_name}</div>}
+                      </td>
+                      <td>
+                        {e.best_score === null ? (
+                          <span style={{ color: 'var(--text-400)', fontSize: 13 }}>Not attempted</span>
+                        ) : (
+                          <span className="role-pill" style={{
+                            background: e.quiz_passed ? '#DCFCE7' : '#FEE2E2',
+                            color: e.quiz_passed ? '#16A34A' : '#DC2626',
+                          }}>
+                            {e.best_score}% {e.quiz_passed ? '· Passed' : '· Failed'}
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        {e.hazard_best_score === null ? (
+                          <span style={{ color: 'var(--text-400)', fontSize: 13 }}>Not attempted</span>
+                        ) : (
+                          <span className="role-pill" style={{ background: 'var(--primary-light)', color: 'var(--primary-dark)' }}>
+                            {e.hazard_best_score}%
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         )}
       </main>
     </div>

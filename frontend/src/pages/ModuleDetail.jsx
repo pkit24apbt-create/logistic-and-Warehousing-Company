@@ -3,6 +3,57 @@ import { useParams, Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import axiosClient from '../api/axiosClient';
 
+function buildContentBlocks(contentBody, images) {
+  const paragraphs = (contentBody || '').split(/\n\s*\n/).filter((p) => p.trim().length > 0);
+  if (!images || images.length === 0) {
+    return paragraphs.map((text) => ({ type: 'text', text }));
+  }
+
+  const blocks = [];
+  const step = Math.max(1, Math.floor(paragraphs.length / (images.length + 1)));
+  let imageIndex = 0;
+
+  paragraphs.forEach((text, i) => {
+    blocks.push({ type: 'text', text });
+    const isInsertPoint = (i + 1) % step === 0 && imageIndex < images.length;
+    if (isInsertPoint) {
+      blocks.push({ type: 'image', image: images[imageIndex] });
+      imageIndex += 1;
+    }
+  });
+
+  while (imageIndex < images.length) {
+    blocks.push({ type: 'image', image: images[imageIndex] });
+    imageIndex += 1;
+  }
+
+  return blocks;
+}
+
+const heroMediaStyle = {
+  width: '100%',
+  maxWidth: 560,
+  display: 'block',
+  margin: '0 auto',
+  borderRadius: 10,
+  boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+};
+
+function Eyebrow({ children }) {
+  return (
+    <p style={{
+      textAlign: 'center', fontSize: 11, fontWeight: 700, letterSpacing: 1,
+      textTransform: 'uppercase', color: 'var(--primary-dark)', margin: '0 0 10px',
+    }}>
+      {children}
+    </p>
+  );
+}
+
+function SectionDivider() {
+  return <div style={{ height: 1, background: 'var(--border)', margin: '28px 0' }} />;
+}
+
 export default function ModuleDetail() {
   const { id } = useParams();
   const [module, setModule] = useState(null);
@@ -12,6 +63,8 @@ export default function ModuleDetail() {
   }, [id]);
 
   if (!module) return <div><Navbar /><main className="dashboard">Loading…</main></div>;
+
+  const blocks = buildContentBlocks(module.content_body, module.images);
 
   return (
     <div>
@@ -26,15 +79,58 @@ export default function ModuleDetail() {
         </div>
         <p className="dashboard-subtitle">{module.topic} {module.is_mandatory && '· Mandatory training'}</p>
 
-        <div className="card" style={{ marginBottom: 20 }}>
-          <h3 style={{ marginTop: 0 }}>Training content</h3>
+        <div className="card" style={{ marginBottom: 20, paddingTop: 28 }}>
+          {/* ===== Hero image ===== */}
           {module.media_url && module.content_type === 'video' && (
-            <video controls style={{ width: '100%', borderRadius: 8, marginBottom: 16 }} src={module.media_url} />
+            <video controls style={{ ...heroMediaStyle, marginBottom: 24 }} src={module.media_url} />
           )}
           {module.media_url && module.content_type === 'image' && (
-            <img src={module.media_url} alt={module.title} style={{ width: '100%', borderRadius: 8, marginBottom: 16 }} />
+            <>
+              <Eyebrow>Overview</Eyebrow>
+              <img src={module.media_url} alt={module.title} style={heroMediaStyle} />
+            </>
           )}
-          <p style={{ lineHeight: 1.7, whiteSpace: 'pre-wrap', color: 'var(--text-900)' }}>{module.content_body}</p>
+
+          {/* ===== Intro paragraph, bridging the image and the video ===== */}
+          {module.intro_text && (
+            <p style={{
+              maxWidth: 560, margin: '20px auto 0', textAlign: 'center',
+              fontSize: 15, lineHeight: 1.7, color: 'var(--text-700, #475569)', fontStyle: 'italic',
+            }}>
+              {module.intro_text}
+            </p>
+          )}
+
+          {/* ===== Video ===== */}
+          {module.video_url && (
+            <>
+              <SectionDivider />
+              <Eyebrow>Training video</Eyebrow>
+              <video controls style={heroMediaStyle} src={module.video_url} />
+            </>
+          )}
+
+          <SectionDivider />
+          <Eyebrow>Full guide</Eyebrow>
+
+          {blocks.map((block, i) =>
+            block.type === 'text' ? (
+              <p key={i} style={{ lineHeight: 1.75, color: 'var(--text-900)', margin: '0 0 18px', fontSize: 15.5 }}>{block.text}</p>
+            ) : (
+              <figure key={i} style={{ margin: '4px 0 24px' }}>
+                <img
+                  src={block.image.image_url}
+                  alt={block.image.caption || module.title}
+                  style={{ ...heroMediaStyle, marginBottom: 6 }}
+                />
+                {block.image.caption && (
+                  <figcaption style={{ fontSize: 12.5, color: 'var(--text-600)', marginTop: 6, textAlign: 'center' }}>
+                    {block.image.caption}
+                  </figcaption>
+                )}
+              </figure>
+            )
+          )}
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: module.quiz && module.hazardScene ? '1fr 1fr' : '1fr', gap: 16, maxWidth: 640 }}>

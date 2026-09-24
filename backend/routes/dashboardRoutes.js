@@ -8,8 +8,6 @@ router.get('/employee', verifyToken, requireRole(['employee', 'administrator']),
   try {
     const { userId } = req.user;
     const [modules, completed] = await Promise.all([
-      // Counts only modules actually assigned to this employee — matches
-      // what they can actually open, not the entire published library.
       query(
         `SELECT COUNT(*)::int AS count FROM training_modules m
          JOIN module_assignments a ON a.module_id = m.module_id AND a.user_id = $1
@@ -40,12 +38,12 @@ router.get('/trainer', verifyToken, requireRole(['trainer', 'administrator']), a
   try {
     const { userId } = req.user;
     const [modules, attempts] = await Promise.all([
-      query(`SELECT COUNT(*)::int AS count FROM training_modules WHERE created_by = $1`, [userId]),
+      query(`SELECT COUNT(*)::int AS count FROM training_modules WHERE trainer_id = $1`, [userId]),
       query(
         `SELECT COUNT(*)::int AS count FROM quiz_attempts qa
          JOIN quizzes q ON qa.quiz_id = q.quiz_id
          JOIN training_modules m ON q.module_id = m.module_id
-         WHERE m.created_by = $1`,
+         WHERE m.trainer_id = $1`,
         [userId]
       ),
     ]);

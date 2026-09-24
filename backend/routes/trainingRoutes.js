@@ -35,6 +35,46 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
+// GET /api/training/my-assigned-employees — Trainer-only: every employee
+// assigned to ANY module this Trainer owns, across all their modules at
+// once, for showing directly on the Trainer's dashboard rather than
+// having to open each module individually.
+router.get('/my-assigned-employees', verifyToken, requireRole(['trainer']), async (req, res) => {
+  try {
+    const { userId } = req.user;
+
+    const result = await query(
+      `SELECT
+         m.module_id, m.title AS module_title,
+         u.user_id, u.full_name, u.email, u.department,
+         a.assigned_at,
+         qa_best.best_score, qa_best.passed AS quiz_passed,
+         ha_best.best_score AS hazard_best_score
+       FROM training_modules m
+       JOIN module_assignments a ON a.module_id = m.module_id
+       JOIN users u ON u.user_id = a.user_id
+       LEFT JOIN LATERAL (
+         SELECT MAX(qa.score) AS best_score, BOOL_OR(qa.passed) AS passed
+         FROM quiz_attempts qa JOIN quizzes q ON qa.quiz_id = q.quiz_id
+         WHERE q.module_id = a.module_id AND qa.user_id = a.user_id
+       ) qa_best ON true
+       LEFT JOIN LATERAL (
+         SELECT MAX(ha.score) AS best_score
+         FROM hazard_attempts ha JOIN hazard_scenes hs ON ha.scene_id = hs.scene_id
+         WHERE hs.module_id = a.module_id AND ha.user_id = a.user_id
+       ) ha_best ON true
+       WHERE m.trainer_id = $1
+       ORDER BY m.title, u.full_name`,
+      [userId]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Get my assigned employees error:', err);
+    res.status(500).json({ error: 'Something went wrong loading your assigned employees.' });
+  }
+});
+
 // GET /api/training/:id — module detail + attached quiz + hazard scene info
 router.get('/:id', verifyToken, async (req, res) => {
   try {
@@ -50,10 +90,16 @@ router.get('/:id', verifyToken, async (req, res) => {
       return res.status(404).json({ error: 'Module not found.' });
     }
 
+    // An Employee can only open a module that has actually been assigned to
+    // them — enforced here on the server, not just hidden from the list, so
+    // typing the URL directly can't be used to bypass the restriction.
     if (req.user.role === 'employee' && !moduleResult.rows[0].assigned) {
       return res.status(403).json({ error: 'This module has not been assigned to you. Contact your administrator or trainer.' });
     }
 
+    // Opening a module marks it "in progress" for this employee — this is
+    // what lets a text-only module (with no quiz) ever be tracked at all,
+    // not just modules that happen to have a quiz attached.
     let progress = null;
     if (req.user.role === 'employee') {
       await query(
@@ -72,11 +118,14 @@ router.get('/:id', verifyToken, async (req, res) => {
     const quizResult = await query('SELECT quiz_id, passing_score, time_limit_sec FROM quizzes WHERE module_id = $1', [id]);
     const hazardResult = await query('SELECT scene_id, title FROM hazard_scenes WHERE module_id = $1', [id]);
 
+    const imagesResult = await query('SELECT image_id, image_url, caption FROM module_images WHERE module_id = $1 ORDER BY sort_order', [id]);
+
     res.json({
       ...moduleResult.rows[0],
       quiz: quizResult.rows[0] || null,
       hazardScene: hazardResult.rows[0] || null,
       progress,
+      images: imagesResult.rows,
     });
   } catch (err) {
     console.error('Get module error:', err);
@@ -263,6 +312,54 @@ router.post('/:id/mark-complete', verifyToken, requireRole(['employee']), async 
   } catch (err) {
     console.error('Mark complete error:', err);
     res.status(500).json({ error: 'Something went wrong marking this module complete.' });
+  }
+});
+
+// GET /api/training/:id/employees — Trainer/Admin view of every employee
+// assigned to this module, along with their quiz and hazard puzzle
+// progress. A Trainer may only view this for a module actually assigned
+// to them, matching the same ownership rule as editing.
+router.get('/:id/employees', verifyToken, requireRole(['trainer', 'administrator']), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (req.user.role === 'trainer') {
+      const ownerCheck = await query('SELECT trainer_id FROM training_modules WHERE module_id = $1', [id]);
+      if (ownerCheck.rows.length === 0) return res.status(404).json({ error: 'Module not found.' });
+      if (ownerCheck.rows[0].trainer_id !== req.user.userId) {
+        return res.status(403).json({ error: 'This module is not assigned to you.' });
+      }
+    }
+
+    const result = await query(
+      `SELECT
+         u.user_id, u.full_name, u.email, u.department,
+         a.assigned_at,
+         ab.full_name AS assigned_by_name,
+         qa_best.best_score, qa_best.passed AS quiz_passed, qa_best.attempted_at AS quiz_last_attempt,
+         ha_best.best_score AS hazard_best_score, ha_best.attempted_at AS hazard_last_attempt
+       FROM module_assignments a
+       JOIN users u ON u.user_id = a.user_id
+       LEFT JOIN users ab ON ab.user_id = a.assigned_by
+       LEFT JOIN LATERAL (
+         SELECT MAX(qa.score) AS best_score, BOOL_OR(qa.passed) AS passed, MAX(qa.attempted_at) AS attempted_at
+         FROM quiz_attempts qa JOIN quizzes q ON qa.quiz_id = q.quiz_id
+         WHERE q.module_id = a.module_id AND qa.user_id = a.user_id
+       ) qa_best ON true
+       LEFT JOIN LATERAL (
+         SELECT MAX(ha.score) AS best_score, MAX(ha.attempted_at) AS attempted_at
+         FROM hazard_attempts ha JOIN hazard_scenes hs ON ha.scene_id = hs.scene_id
+         WHERE hs.module_id = a.module_id AND ha.user_id = a.user_id
+       ) ha_best ON true
+       WHERE a.module_id = $1
+       ORDER BY u.full_name`,
+      [id]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Get module employees error:', err);
+    res.status(500).json({ error: 'Something went wrong loading assigned employees.' });
   }
 });
 

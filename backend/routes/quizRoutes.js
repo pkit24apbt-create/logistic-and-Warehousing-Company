@@ -9,8 +9,6 @@ router.get('/module/:moduleId', verifyToken, async (req, res) => {
   try {
     const { moduleId } = req.params;
 
-    // Same enforcement as the module detail page: an Employee can only
-    // take a quiz for a module that's actually been assigned to them.
     if (req.user.role === 'employee') {
       const assignedCheck = await query(
         'SELECT 1 FROM module_assignments WHERE module_id = $1 AND user_id = $2',
@@ -26,7 +24,7 @@ router.get('/module/:moduleId', verifyToken, async (req, res) => {
     const quiz = quizResult.rows[0];
 
     const questionsResult = await query(
-      'SELECT question_id, question_text, question_type, sort_order FROM questions WHERE quiz_id = $1 ORDER BY sort_order',
+      'SELECT question_id, question_text, question_type, sort_order, difficulty FROM questions WHERE quiz_id = $1 ORDER BY sort_order',
       [quiz.quiz_id]
     );
     const questions = questionsResult.rows;
@@ -75,8 +73,8 @@ router.post('/:quizId/build', verifyToken, requireRole(['trainer', 'administrato
     for (let i = 0; i < (questions || []).length; i++) {
       const q = questions[i];
       const qResult = await client.query(
-        'INSERT INTO questions (quiz_id, question_text, question_type, sort_order) VALUES ($1,$2,$3,$4) RETURNING question_id',
-        [quizId, q.text, q.type || 'single', i]
+        'INSERT INTO questions (quiz_id, question_text, question_type, sort_order, difficulty) VALUES ($1,$2,$3,$4,$5) RETURNING question_id',
+        [quizId, q.text, q.type || 'single', i, q.difficulty || 'medium']
       );
       const questionId = qResult.rows[0].question_id;
       for (const opt of q.options || []) {
@@ -146,8 +144,6 @@ router.post('/:quizId/submit', verifyToken, requireRole(['employee']), async (re
     const score = Math.round((correctCount / questionIds.length) * 100);
     const passed = score >= quiz.passing_score;
 
-    // Upsert module_progress: passing marks the module fully complete;
-    // failing still records that the employee is actively working on it.
     await query(
       `INSERT INTO module_progress (user_id, module_id, status, percent_complete, completed_at)
        VALUES ($1, $2, $3, $4, $5)
