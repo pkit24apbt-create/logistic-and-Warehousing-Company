@@ -23,8 +23,8 @@ router.get('/module/:moduleId', verifyToken, async (req, res) => {
     if (quizResult.rows.length === 0) return res.status(404).json({ error: 'No quiz found for this module.' });
     const quiz = quizResult.rows[0];
 
-    const questionsResult = await query(
-      'SELECT question_id, question_text, question_type, sort_order, difficulty FROM questions WHERE quiz_id = $1 ORDER BY sort_order',
+        const questionsResult = await query(
+      'SELECT question_id, question_text, question_type, sort_order, difficulty FROM questions WHERE quiz_id = $1 ORDER BY RANDOM() LIMIT 5',
       [quiz.quiz_id]
     );
     const questions = questionsResult.rows;

@@ -124,7 +124,7 @@ export default function App() {
             }
           />
           <Route
-            path="/modules/:id/hazard"
+            path="/hazard/:sceneId"
             element={
               <ProtectedRoute allowedRoles={['employee']}>
                 <HazardPuzzle />

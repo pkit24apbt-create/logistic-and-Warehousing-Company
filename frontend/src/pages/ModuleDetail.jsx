@@ -31,12 +31,8 @@ function buildContentBlocks(contentBody, images) {
 }
 
 const heroMediaStyle = {
-  width: '100%',
-  maxWidth: 560,
-  display: 'block',
-  margin: '0 auto',
-  borderRadius: 10,
-  boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+  width: '100%', maxWidth: 560, display: 'block', margin: '0 auto',
+  borderRadius: 10, boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
 };
 
 function Eyebrow({ children }) {
@@ -57,9 +53,11 @@ function SectionDivider() {
 export default function ModuleDetail() {
   const { id } = useParams();
   const [module, setModule] = useState(null);
+  const [hazardScenes, setHazardScenes] = useState([]);
 
   useEffect(() => {
     axiosClient.get(`/training/${id}`).then((res) => setModule(res.data));
+    axiosClient.get(`/hazard/module/${id}/scenes`).then((res) => setHazardScenes(res.data)).catch(() => setHazardScenes([]));
   }, [id]);
 
   if (!module) return <div><Navbar /><main className="dashboard">Loading…</main></div>;
@@ -80,7 +78,6 @@ export default function ModuleDetail() {
         <p className="dashboard-subtitle">{module.topic} {module.is_mandatory && '· Mandatory training'}</p>
 
         <div className="card" style={{ marginBottom: 20, paddingTop: 28 }}>
-          {/* ===== Hero image ===== */}
           {module.media_url && module.content_type === 'video' && (
             <video controls style={{ ...heroMediaStyle, marginBottom: 24 }} src={module.media_url} />
           )}
@@ -91,7 +88,6 @@ export default function ModuleDetail() {
             </>
           )}
 
-          {/* ===== Intro paragraph, bridging the image and the video ===== */}
           {module.intro_text && (
             <p style={{
               maxWidth: 560, margin: '20px auto 0', textAlign: 'center',
@@ -101,7 +97,6 @@ export default function ModuleDetail() {
             </p>
           )}
 
-          {/* ===== Video ===== */}
           {module.video_url && (
             <>
               <SectionDivider />
@@ -133,9 +128,9 @@ export default function ModuleDetail() {
           )}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: module.quiz && module.hazardScene ? '1fr 1fr' : '1fr', gap: 16, maxWidth: 640 }}>
+        <div style={{ maxWidth: 640 }}>
           {module.quiz && (
-            <div className="card">
+            <div className="card" style={{ marginBottom: 16 }}>
               <h3 style={{ marginTop: 0 }}>Knowledge check</h3>
               <p className="dashboard-subtitle">
                 {Math.round(module.quiz.time_limit_sec / 60)} min · Pass mark {module.quiz.passing_score}%
@@ -146,18 +141,28 @@ export default function ModuleDetail() {
             </div>
           )}
 
-          {module.hazardScene && (
+          {hazardScenes.length > 0 && (
             <div className="card">
-              <h3 style={{ marginTop: 0 }}>Hazard Hunt</h3>
-              <p className="dashboard-subtitle">Find the hidden hazards in the scene.</p>
-              <Link to={`/modules/${id}/hazard`} className="auth-btn-primary" style={{ display: 'inline-block', width: 'auto', padding: '10px 24px', textDecoration: 'none' }}>
-                Start Hazard Hunt
-              </Link>
+              <h3 style={{ marginTop: 0 }}>Hazard Hunt{hazardScenes.length > 1 ? ` — ${hazardScenes.length} puzzles` : ''}</h3>
+              <p className="dashboard-subtitle" style={{ marginBottom: 14 }}>Find the hidden hazards in each scene.</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {hazardScenes.map((scene, i) => (
+                  <div key={scene.scene_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 8 }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13.5 }}>{hazardScenes.length > 1 ? `Puzzle ${i + 1}: ` : ''}{scene.title}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-600)' }}>{scene.hazard_count} hazards to find</div>
+                    </div>
+                    <Link to={`/hazard/${scene.scene_id}`} className="auth-btn-primary" style={{ width: 'auto', padding: '8px 18px', fontSize: 13, textDecoration: 'none' }}>
+                      Start
+                    </Link>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
 
-        {!module.quiz && !module.hazardScene && (
+        {!module.quiz && hazardScenes.length === 0 && (
           <p className="dashboard-subtitle">No quiz or hazard hunt attached to this module yet.</p>
         )}
       </main>

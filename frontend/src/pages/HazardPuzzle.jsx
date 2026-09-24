@@ -4,22 +4,23 @@ import Navbar from '../components/Navbar';
 import axiosClient from '../api/axiosClient';
 
 export default function HazardPuzzle() {
-  const { id: moduleId } = useParams();
+  const { sceneId } = useParams();
   const [scene, setScene] = useState(null);
+  const [started, setStarted] = useState(false);
   const [clicks, setClicks] = useState([]);
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const imageRef = useRef(null);
 
   useEffect(() => {
-    axiosClient.get(`/hazard/module/${moduleId}`).then((res) => setScene(res.data));
-  }, [moduleId]);
+    axiosClient.get(`/hazard/scene/${sceneId}/play`).then((res) => setScene(res.data));
+  }, [sceneId]);
 
   function handleImageClick(e) {
     if (result) return;
     const rect = imageRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    const x = Math.round(((e.clientX - rect.left) / rect.width) * 1000) / 10;
+    const y = Math.round(((e.clientY - rect.top) / rect.height) * 1000) / 10;
     setClicks((prev) => [...prev, { x, y }]);
   }
 
@@ -30,7 +31,7 @@ export default function HazardPuzzle() {
   async function submit() {
     setSubmitting(true);
     try {
-      const res = await axiosClient.post(`/hazard/${scene.sceneId}/submit`, { clicks });
+      const res = await axiosClient.post(`/hazard/scene/${sceneId}/submit`, { clicks });
       setResult(res.data);
     } finally {
       setSubmitting(false);
@@ -40,103 +41,118 @@ export default function HazardPuzzle() {
   function retry() {
     setClicks([]);
     setResult(null);
+    setStarted(true);
   }
 
-  if (!scene) return <div><Navbar /><main className="dashboard">Loading hazard scene…</main></div>;
+  if (!scene) return <div><Navbar /><main className="dashboard">Loading…</main></div>;
 
   return (
     <div>
       <Navbar />
       <main className="dashboard">
-        <Link to={`/modules/${moduleId}`} style={{ fontSize: 13 }}>&larr; Back to module</Link>
+        <Link to={`/modules/${scene.module_id}`} style={{ fontSize: 13 }}>&larr; Back to module</Link>
         <h1 style={{ marginTop: 10 }}>{scene.title}</h1>
-        <p className="dashboard-subtitle">
-          {result
-            ? `You found ${result.foundCount} of ${result.totalCount} hazards.`
-            : `Click on the image where you think a hazard is. There ${scene.totalHotspots === 1 ? 'is' : 'are'} ${scene.totalHotspots} to find.`}
-        </p>
 
-        <div className="card" style={{ maxWidth: 900 }}>
-          <div
-            ref={imageRef}
-            onClick={handleImageClick}
-            style={{ position: 'relative', width: '100%', cursor: result ? 'default' : 'crosshair', borderRadius: 10, overflow: 'hidden' }}
-          >
-            <img src={scene.imageUrl} alt={scene.title} style={{ width: '100%', display: 'block' }} draggable={false} />
-
-            {!result && clicks.map((c, i) => (
-              <div
-                key={i}
-                onClick={(e) => { e.stopPropagation(); removeClick(i); }}
-                title="Click to remove"
-                style={{
-                  position: 'absolute', left: `${c.x}%`, top: `${c.y}%`,
-                  width: 22, height: 22, marginLeft: -11, marginTop: -11,
-                  borderRadius: '50%', background: 'rgba(15,118,110,0.85)', border: '2px solid #fff',
-                  color: '#fff', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-                }}
-              >
-                {i + 1}
+        {!started && (
+          <div className="card" style={{ maxWidth: 640 }}>
+            <p className="dashboard-subtitle" style={{ margin: '0 0 12px' }}>
+              There {scene.hazard_count === 1 ? 'is' : 'are'} {scene.hazard_count} hazard{scene.hazard_count === 1 ? '' : 's'} to find in this scene.
+            </p>
+            {scene.intro_tips && (
+              <div style={{
+                background: 'var(--primary-light)', border: '1px solid var(--primary)',
+                borderRadius: 8, padding: '14px 16px', marginBottom: 16,
+              }}>
+                <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6, color: 'var(--primary-dark)' }}>
+                  <strong>Before you begin: </strong>{scene.intro_tips}
+                </p>
               </div>
-            ))}
-
-            {result && result.hotspots.map((h, i) => (
-              <div
-                key={i}
-                title={h.label}
-                style={{
-                  position: 'absolute', left: `${h.x}%`, top: `${h.y}%`,
-                  width: 26, height: 26, marginLeft: -13, marginTop: -13,
-                  borderRadius: '50%',
-                  background: h.found ? 'rgba(22,163,74,0.85)' : 'rgba(220,38,38,0.85)',
-                  border: '2px solid #fff', boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 13,
-                }}
-              >
-                {h.found ? '✓' : '!'}
-              </div>
-            ))}
+            )}
+            <button className="auth-btn-primary" style={{ width: 'auto', padding: '10px 24px' }} onClick={() => setStarted(true)}>
+              Start Puzzle
+            </button>
           </div>
+        )}
 
-          {!result && (
-            <div style={{ marginTop: 16, display: 'flex', gap: 10, alignItems: 'center' }}>
-              <button className="auth-btn-primary" style={{ width: 'auto', padding: '10px 24px' }} onClick={submit} disabled={submitting || clicks.length === 0}>
-                {submitting ? 'Checking…' : 'Submit Findings'}
-              </button>
-              <span style={{ fontSize: 13, color: 'var(--text-600)' }}>
-                {clicks.length} mark{clicks.length === 1 ? '' : 's'} placed — click a mark to remove it
-              </span>
-            </div>
-          )}
-        </div>
+        {started && (
+          <div className="card" style={{ maxWidth: 900 }}>
+            {!result && (
+              <p className="dashboard-subtitle" style={{ margin: '0 0 12px' }}>
+                Click on the image where you think a hazard is. There {scene.hazard_count === 1 ? 'is' : 'are'} {scene.hazard_count} to find.
+              </p>
+            )}
 
-        {result && (
-          <div className="card" style={{ maxWidth: 900, marginTop: 16 }}>
-            <h3 style={{ marginTop: 0 }}>Score: {result.score}%</h3>
-            {result.hotspots.map((h, i) => (
-              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 12 }}>
-                <span style={{
-                  width: 22, height: 22, borderRadius: '50%', flex: 'none', marginTop: 2,
-                  background: h.found ? '#DCFCE7' : '#FEE2E2', color: h.found ? '#16A34A' : '#DC2626',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12,
-                }}>
-                  {h.found ? '✓' : '!'}
-                </span>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 13.5 }}>{h.label}</div>
-                  <div style={{ fontSize: 13, color: 'var(--text-600)' }}>{h.explanation}</div>
+            <div
+              ref={imageRef}
+              onClick={handleImageClick}
+              style={{ position: 'relative', width: '100%', cursor: result ? 'default' : 'crosshair', borderRadius: 10, overflow: 'hidden', marginBottom: 16 }}
+            >
+              <img src={scene.image_url} alt={scene.title} style={{ width: '100%', display: 'block' }} draggable={false} />
+
+              {!result && clicks.map((c, i) => (
+                <div
+                  key={i}
+                  onClick={(e) => { e.stopPropagation(); removeClick(i); }}
+                  title="Click to remove"
+                  style={{
+                    position: 'absolute', left: `${c.x}%`, top: `${c.y}%`,
+                    width: 22, height: 22, marginLeft: -11, marginTop: -11,
+                    borderRadius: '50%', background: 'rgba(15,118,110,0.85)', border: '2px solid #fff',
+                    cursor: 'pointer',
+                  }}
+                />
+              ))}
+
+              {result && result.hotspots.map((h, i) => (
+                <div
+                  key={i}
+                  style={{
+                    position: 'absolute', left: `${h.x_percent}%`, top: `${h.y_percent}%`,
+                    width: 26, height: 26, marginLeft: -13, marginTop: -13,
+                    borderRadius: '50%', border: '2px solid #fff',
+                    background: h.wasFound ? 'rgba(22,163,74,0.9)' : 'rgba(220,38,38,0.9)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: '#fff', fontSize: 13, fontWeight: 800,
+                  }}
+                >
+                  {h.wasFound ? '✓' : '!'}
                 </div>
-              </div>
-            ))}
-            <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
-              <Link to={`/modules/${moduleId}`} style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 20px', fontSize: 13.5, color: 'var(--text-900)', textDecoration: 'none' }}>
-                Back to Module
-              </Link>
-              <button className="auth-btn-primary" style={{ width: 'auto', padding: '10px 24px' }} onClick={retry}>
-                Try Again
-              </button>
+              ))}
             </div>
+
+            {!result && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <p className="dashboard-subtitle" style={{ margin: 0 }}>
+                  {clicks.length} mark{clicks.length === 1 ? '' : 's'} placed — click a mark to remove it
+                </p>
+                <button className="auth-btn-primary" style={{ width: 'auto', padding: '10px 24px' }} onClick={submit} disabled={submitting || clicks.length === 0}>
+                  {submitting ? 'Submitting…' : 'Submit Findings'}
+                </button>
+              </div>
+            )}
+
+            {result && (
+              <>
+                <h2 style={{ margin: '0 0 4px' }}>Score: {result.score}%</h2>
+                <p className="dashboard-subtitle" style={{ margin: '0 0 16px' }}>
+                  You found {result.foundCount} of {result.totalCount} hazards.
+                </p>
+                {result.hotspots.map((h, i) => (
+                  <div key={i} style={{ marginBottom: 12 }}>
+                    <strong style={{ fontSize: 13.5, color: h.wasFound ? '#16A34A' : '#DC2626' }}>
+                      {h.wasFound ? 'Found: ' : 'Missed: '}{h.label}
+                    </strong>
+                    <p style={{ margin: '2px 0 0', fontSize: 13, color: 'var(--text-600)' }}>{h.explanation}</p>
+                  </div>
+                ))}
+                <button
+                  onClick={retry}
+                  style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 20px', fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit', marginTop: 8 }}
+                >
+                  Try Again
+                </button>
+              </>
+            )}
           </div>
         )}
       </main>

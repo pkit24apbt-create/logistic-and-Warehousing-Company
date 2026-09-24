@@ -454,3 +454,124 @@ WHERE s.module_id = (SELECT module_id FROM training_modules WHERE title = 'Cyber
 SELECT label, x_percent, y_percent FROM hazard_hotspots
 WHERE scene_id = (SELECT scene_id FROM hazard_scenes WHERE module_id = (SELECT module_id FROM training_modules WHERE title = 'Cyber Awareness'))
 ORDER BY x_percent;
+
+-- Adds 3 more questions to each quiz, bringing the pool to 8 questions
+-- per module (previously 5). A larger pool is what makes real question
+-- rotation on retake possible — see quizRoutes.js change below, which
+-- randomly draws 5 of these 8 each time the quiz is opened.
+
+INSERT INTO questions (quiz_id, question_text, question_type, sort_order, difficulty)
+SELECT q.quiz_id, x.question_text, 'single', x.sort_order, x.difficulty
+FROM quizzes q JOIN training_modules m ON q.module_id = m.module_id,
+(VALUES
+  ('What is the safest way to change direction while carrying a load?', 6, 'easy'),
+  ('Why should a load be kept close to your body while lifting?', 7, 'medium'),
+  ('What should you do if you feel pain during or after a lift?', 8, 'medium')
+) AS x(question_text, sort_order, difficulty)
+WHERE m.title = 'Manual Handling in the Warehouse'
+AND NOT EXISTS (SELECT 1 FROM questions WHERE quiz_id = q.quiz_id AND question_text = x.question_text);
+
+INSERT INTO answer_options (question_id, option_text, is_correct)
+SELECT qq.question_id, opt.text, opt.correct
+FROM questions qq JOIN quizzes q ON qq.quiz_id = q.quiz_id JOIN training_modules m ON q.module_id = m.module_id,
+(VALUES ('Move your feet rather than twisting your spine', TRUE), ('Twist at the waist while keeping your feet still', FALSE), ('Keep walking forward regardless of direction', FALSE)) AS opt(text, correct)
+WHERE m.title = 'Manual Handling in the Warehouse' AND qq.question_text = 'What is the safest way to change direction while carrying a load?'
+AND NOT EXISTS (SELECT 1 FROM answer_options WHERE question_id = qq.question_id);
+
+INSERT INTO answer_options (question_id, option_text, is_correct)
+SELECT qq.question_id, opt.text, opt.correct
+FROM questions qq JOIN quizzes q ON qq.quiz_id = q.quiz_id JOIN training_modules m ON q.module_id = m.module_id,
+(VALUES ('It reduces the strain on your back compared to holding it away from you', TRUE), ('It makes the load look lighter to observers', FALSE), ('It has no real effect on safety', FALSE)) AS opt(text, correct)
+WHERE m.title = 'Manual Handling in the Warehouse' AND qq.question_text = 'Why should a load be kept close to your body while lifting?'
+AND NOT EXISTS (SELECT 1 FROM answer_options WHERE question_id = qq.question_id);
+
+INSERT INTO answer_options (question_id, option_text, is_correct)
+SELECT qq.question_id, opt.text, opt.correct
+FROM questions qq JOIN quizzes q ON qq.quiz_id = q.quiz_id JOIN training_modules m ON q.module_id = m.module_id,
+(VALUES ('Stop the task immediately and report it to your supervisor', TRUE), ('Continue and mention it at the end of the shift', FALSE), ('Ignore it if the pain is mild', FALSE)) AS opt(text, correct)
+WHERE m.title = 'Manual Handling in the Warehouse' AND qq.question_text = 'What should you do if you feel pain during or after a lift?'
+AND NOT EXISTS (SELECT 1 FROM answer_options WHERE question_id = qq.question_id);
+
+INSERT INTO questions (quiz_id, question_text, question_type, sort_order, difficulty)
+SELECT q.quiz_id, x.question_text, 'single', x.sort_order, x.difficulty
+FROM quizzes q JOIN training_modules m ON q.module_id = m.module_id,
+(VALUES
+  ('What is the STOP method used for?', 6, 'easy'),
+  ('Why should near misses be reported, even if nobody was hurt?', 7, 'medium'),
+  ('What is normalisation of deviance?', 8, 'hard')
+) AS x(question_text, sort_order, difficulty)
+WHERE m.title = 'Hazard Perception'
+AND NOT EXISTS (SELECT 1 FROM questions WHERE quiz_id = q.quiz_id AND question_text = x.question_text);
+
+INSERT INTO answer_options (question_id, option_text, is_correct)
+SELECT qq.question_id, opt.text, opt.correct
+FROM questions qq JOIN quizzes q ON qq.quiz_id = q.quiz_id JOIN training_modules m ON q.module_id = m.module_id,
+(VALUES ('A structured way to pause and check an area for hazards before proceeding', TRUE), ('A way to stop machinery in an emergency', FALSE), ('A method for reporting completed training', FALSE)) AS opt(text, correct)
+WHERE m.title = 'Hazard Perception' AND qq.question_text = 'What is the STOP method used for?'
+AND NOT EXISTS (SELECT 1 FROM answer_options WHERE question_id = qq.question_id);
+
+INSERT INTO answer_options (question_id, option_text, is_correct)
+SELECT qq.question_id, opt.text, opt.correct
+FROM questions qq JOIN quizzes q ON qq.quiz_id = q.quiz_id JOIN training_modules m ON q.module_id = m.module_id,
+(VALUES ('It can prevent a real injury from happening later', TRUE), ('It is only useful for insurance records', FALSE), ('It is not necessary if nobody saw it happen', FALSE)) AS opt(text, correct)
+WHERE m.title = 'Hazard Perception' AND qq.question_text = 'Why should near misses be reported, even if nobody was hurt?'
+AND NOT EXISTS (SELECT 1 FROM answer_options WHERE question_id = qq.question_id);
+
+INSERT INTO answer_options (question_id, option_text, is_correct)
+SELECT qq.question_id, opt.text, opt.correct
+FROM questions qq JOIN quizzes q ON qq.quiz_id = q.quiz_id JOIN training_modules m ON q.module_id = m.module_id,
+(VALUES ('When an unsafe condition persists without incident and people stop noticing it', TRUE), ('A formal safety inspection process', FALSE), ('A type of protective equipment', FALSE)) AS opt(text, correct)
+WHERE m.title = 'Hazard Perception' AND qq.question_text = 'What is normalisation of deviance?'
+AND NOT EXISTS (SELECT 1 FROM answer_options WHERE question_id = qq.question_id);
+
+INSERT INTO questions (quiz_id, question_text, question_type, sort_order, difficulty)
+SELECT q.quiz_id, x.question_text, 'single', x.sort_order, x.difficulty
+FROM quizzes q JOIN training_modules m ON q.module_id = m.module_id,
+(VALUES
+  ('What is a good sign that an email might be a phishing attempt?', 6, 'easy'),
+  ('Why should you never plug in an unknown USB drive?', 7, 'medium'),
+  ('What should you do if you think you have already clicked a malicious link?', 8, 'medium')
+) AS x(question_text, sort_order, difficulty)
+WHERE m.title = 'Cyber Awareness'
+AND NOT EXISTS (SELECT 1 FROM questions WHERE quiz_id = q.quiz_id AND question_text = x.question_text);
+
+INSERT INTO answer_options (question_id, option_text, is_correct)
+SELECT qq.question_id, opt.text, opt.correct
+FROM questions qq JOIN quizzes q ON qq.quiz_id = q.quiz_id JOIN training_modules m ON q.module_id = m.module_id,
+(VALUES ('It creates a strong sense of urgency or fear', TRUE), ('It is addressed to you by name', FALSE), ('It comes from a colleague you recognise', FALSE)) AS opt(text, correct)
+WHERE m.title = 'Cyber Awareness' AND qq.question_text = 'What is a good sign that an email might be a phishing attempt?'
+AND NOT EXISTS (SELECT 1 FROM answer_options WHERE question_id = qq.question_id);
+
+INSERT INTO answer_options (question_id, option_text, is_correct)
+SELECT qq.question_id, opt.text, opt.correct
+FROM questions qq JOIN quizzes q ON qq.quiz_id = q.quiz_id JOIN training_modules m ON q.module_id = m.module_id,
+(VALUES ('It is a common way malware gets onto a company system', TRUE), ('It will slow down your computer', FALSE), ('It has no real security risk', FALSE)) AS opt(text, correct)
+WHERE m.title = 'Cyber Awareness' AND qq.question_text = 'Why should you never plug in an unknown USB drive?'
+AND NOT EXISTS (SELECT 1 FROM answer_options WHERE question_id = qq.question_id);
+
+INSERT INTO answer_options (question_id, option_text, is_correct)
+SELECT qq.question_id, opt.text, opt.correct
+FROM questions qq JOIN quizzes q ON qq.quiz_id = q.quiz_id JOIN training_modules m ON q.module_id = m.module_id,
+(VALUES ('Report it immediately rather than staying quiet', TRUE), ('Wait to see if anything bad actually happens', FALSE), ('Only mention it if asked directly', FALSE)) AS opt(text, correct)
+WHERE m.title = 'Cyber Awareness' AND qq.question_text = 'What should you do if you think you have already clicked a malicious link?'
+AND NOT EXISTS (SELECT 1 FROM answer_options WHERE question_id = qq.question_id);
+
+-- Confirm the pool size per module.
+SELECT m.title, COUNT(qq.question_id) AS total_question_pool
+FROM training_modules m JOIN quizzes q ON q.module_id = m.module_id JOIN questions qq ON qq.quiz_id = q.quiz_id
+WHERE m.title IN ('Manual Handling in the Warehouse', 'Hazard Perception', 'Cyber Awareness')
+GROUP BY m.title;
+
+ALTER TABLE hazard_scenes ADD COLUMN IF NOT EXISTS intro_tips TEXT;
+
+UPDATE hazard_scenes SET intro_tips =
+'Before you begin, think back to the categories of hazard covered in this module: obstructed walkways, damaged or overloaded racking, poor housekeeping, and unsafe vehicle or pedestrian movement. Take your time scanning the whole image rather than clicking the first thing you notice.'
+WHERE module_id = (SELECT module_id FROM training_modules WHERE title = 'Hazard Perception');
+
+UPDATE hazard_scenes SET intro_tips =
+'Before you begin, remember the four lifting technique checks: are the knees bent rather than the back, is the load held close to the body, is the spine kept straight without twisting, and is anyone lifting alone who really needs help? Look for postures that break these rules.'
+WHERE module_id = (SELECT module_id FROM training_modules WHERE title = 'Manual Handling in the Warehouse');
+
+UPDATE hazard_scenes SET intro_tips =
+'Before you begin, think about how sensitive information can be accidentally exposed: written down in plain sight, left unattended, or visible to someone who should not see it. Look for anything that reveals information that should be kept private.'
+WHERE module_id = (SELECT module_id FROM training_modules WHERE title = 'Cyber Awareness');
