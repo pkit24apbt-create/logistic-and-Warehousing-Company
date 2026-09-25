@@ -13,9 +13,10 @@ router.get('/', verifyToken, async (req, res) => {
       result = await query('SELECT * FROM training_modules WHERE trainer_id = $1 ORDER BY created_at DESC', [userId]);
     } else if (role === 'administrator' || role === 'supervisor') {
       result = await query(
-        `SELECT m.*, u.full_name AS owner_name
+        `SELECT m.*, u.full_name AS owner_name, c.full_name AS created_by_name
          FROM training_modules m
          LEFT JOIN users u ON m.trainer_id = u.user_id
+         LEFT JOIN users c ON m.created_by_id = c.user_id
          ORDER BY m.created_at DESC`
       );
     } else {
@@ -75,15 +76,82 @@ router.get('/my-assigned-employees', verifyToken, requireRole(['trainer']), asyn
   }
 });
 
+// GET /api/training/my-overall-progress — Employee-only: summarizes level
+// and puzzle progress across EVERY module assigned to them, for showing
+// directly on their dashboard.
+router.get('/my-overall-progress', verifyToken, requireRole(['employee']), async (req, res) => {
+  try {
+    const { userId } = req.user;
+
+    const modulesResult = await query(
+      `SELECT m.module_id, m.title FROM training_modules m
+       JOIN module_assignments a ON a.module_id = m.module_id
+       WHERE a.user_id = $1 AND m.status = 'published'
+       ORDER BY m.title`,
+      [userId]
+    );
+
+    const results = [];
+    for (const m of modulesResult.rows) {
+      let levelSummary = null;
+      const quizRow = await query('SELECT quiz_id FROM quizzes WHERE module_id = $1', [m.module_id]);
+      if (quizRow.rows.length > 0) {
+        const quizId = quizRow.rows[0].quiz_id;
+        const totalLevelsResult = await query(
+          'SELECT DISTINCT level FROM questions WHERE quiz_id = $1 AND level IS NOT NULL',
+          [quizId]
+        );
+        const passedLevelsResult = await query(
+          'SELECT DISTINCT level FROM quiz_attempts WHERE quiz_id = $1 AND user_id = $2 AND passed = TRUE AND level IS NOT NULL',
+          [quizId, userId]
+        );
+        levelSummary = { totalLevels: totalLevelsResult.rows.length, passedLevels: passedLevelsResult.rows.length };
+      }
+
+      const scenesResult = await query('SELECT scene_id FROM hazard_scenes WHERE module_id = $1', [m.module_id]);
+      let attemptedPuzzles = 0;
+      for (const s of scenesResult.rows) {
+        const attempt = await query(
+          'SELECT 1 FROM hazard_attempts WHERE scene_id = $1 AND user_id = $2 LIMIT 1',
+          [s.scene_id, userId]
+        );
+        if (attempt.rows.length > 0) attemptedPuzzles += 1;
+      }
+
+      const progressResult = await query(
+        'SELECT status, percent_complete FROM module_progress WHERE user_id = $1 AND module_id = $2',
+        [userId, m.module_id]
+      );
+      const progress = progressResult.rows[0] || null;
+
+      results.push({
+        moduleId: m.module_id,
+        title: m.title,
+        levelSummary,
+        totalPuzzles: scenesResult.rows.length,
+        attemptedPuzzles,
+        status: progress ? progress.status : 'not_started',
+      });
+    }
+
+    res.json(results);
+  } catch (err) {
+    console.error('Get my overall progress error:', err);
+    res.status(500).json({ error: 'Something went wrong loading your progress.' });
+  }
+});
+
 // GET /api/training/:id — module detail + attached quiz + hazard scene info
 router.get('/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const moduleResult = await query(
-      `SELECT m.*, u.full_name AS owner_name,
+      `SELECT m.*, u.full_name AS owner_name, c.full_name AS created_by_name,
               EXISTS(SELECT 1 FROM module_assignments a WHERE a.module_id = m.module_id AND a.user_id = $2) AS assigned
        FROM training_modules m
-       LEFT JOIN users u ON m.trainer_id = u.user_id WHERE m.module_id = $1`,
+       LEFT JOIN users u ON m.trainer_id = u.user_id
+       LEFT JOIN users c ON m.created_by_id = c.user_id
+       WHERE m.module_id = $1`,
       [id, req.user.userId]
     );
     if (moduleResult.rows.length === 0) {
@@ -158,9 +226,9 @@ router.post('/', verifyToken, requireRole(['administrator']), async (req, res) =
     }
 
     const inserted = await query(
-      `INSERT INTO training_modules (title, topic, content_type, content_body, media_url, is_mandatory, status, trainer_id)
-       VALUES ($1,$2,$3,$4,$5,$6,'draft',$7) RETURNING *`,
-      [title, topic || null, contentType || 'text', contentBody, mediaUrl || null, isMandatory !== false, ownerId]
+      `INSERT INTO training_modules (title, topic, content_type, content_body, media_url, is_mandatory, status, trainer_id, created_by_id)
+       VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,$8) RETURNING *`,
+      [title, topic || null, contentType || 'text', contentBody, mediaUrl || null, isMandatory !== false, ownerId, req.user.userId]
     );
 
     await query(
@@ -360,6 +428,72 @@ router.get('/:id/employees', verifyToken, requireRole(['trainer', 'administrator
   } catch (err) {
     console.error('Get module employees error:', err);
     res.status(500).json({ error: 'Something went wrong loading assigned employees.' });
+  }
+});
+
+// GET /api/training/:id/my-progress — Employee-only: combines their best
+// quiz score with the average of their best score on every puzzle
+// attached to this module, into one overall module mark. Shows whether
+// the module is fully complete (quiz passed AND every puzzle attempted).
+router.get('/:id/my-progress', verifyToken, requireRole(['employee']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.user;
+
+    const assignedCheck = await query(
+      'SELECT 1 FROM module_assignments WHERE module_id = $1 AND user_id = $2',
+      [id, userId]
+    );
+    if (assignedCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'This module has not been assigned to you.' });
+    }
+
+    const quizResult = await query(
+      `SELECT MAX(qa.score) AS best_score, BOOL_OR(qa.passed) AS passed
+       FROM quiz_attempts qa JOIN quizzes q ON qa.quiz_id = q.quiz_id
+       WHERE q.module_id = $1 AND qa.user_id = $2`,
+      [id, userId]
+    );
+    const hasQuiz = await query('SELECT 1 FROM quizzes WHERE module_id = $1', [id]);
+
+    const puzzlesResult = await query(
+      `SELECT hs.scene_id, hs.title,
+              (SELECT MAX(ha.score) FROM hazard_attempts ha WHERE ha.scene_id = hs.scene_id AND ha.user_id = $2) AS best_score
+       FROM hazard_scenes hs WHERE hs.module_id = $1 ORDER BY hs.scene_id`,
+      [id, userId]
+    );
+
+    const quizScore = hasQuiz.rows.length > 0 ? quizResult.rows[0].best_score : null;
+    const quizPassed = hasQuiz.rows.length > 0 ? (quizResult.rows[0].passed || false) : null;
+    const puzzles = puzzlesResult.rows;
+    const attemptedPuzzles = puzzles.filter((p) => p.best_score !== null);
+    const puzzleAverage = attemptedPuzzles.length > 0
+      ? Math.round(attemptedPuzzles.reduce((sum, p) => sum + p.best_score, 0) / attemptedPuzzles.length)
+      : null;
+
+    const components = [];
+    if (quizScore !== null && quizScore !== undefined) components.push(quizScore);
+    if (puzzleAverage !== null) components.push(puzzleAverage);
+    const overallScore = components.length > 0
+      ? Math.round(components.reduce((a, b) => a + b, 0) / components.length)
+      : null;
+
+    const quizDone = hasQuiz.rows.length === 0 || quizPassed === true;
+    const allPuzzlesDone = puzzles.length === 0 || puzzles.every((p) => p.best_score !== null);
+    const isModuleComplete = quizDone && allPuzzlesDone && overallScore !== null;
+
+    res.json({
+      quizScore: quizScore ?? null,
+      quizPassed: quizPassed ?? null,
+      hasQuiz: hasQuiz.rows.length > 0,
+      puzzles: puzzles.map((p) => ({ sceneId: p.scene_id, title: p.title, bestScore: p.best_score })),
+      puzzleAverage,
+      overallScore,
+      isModuleComplete,
+    });
+  } catch (err) {
+    console.error('Get my progress error:', err);
+    res.status(500).json({ error: 'Something went wrong loading your progress.' });
   }
 });
 

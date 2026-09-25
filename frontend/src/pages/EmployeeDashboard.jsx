@@ -10,10 +10,12 @@ import axiosClient from '../api/axiosClient';
 export default function EmployeeDashboard() {
   const [data, setData] = useState(null);
   const [attempts, setAttempts] = useState([]);
+  const [myProgress, setMyProgress] = useState([]);
 
   useEffect(() => {
     axiosClient.get('/dashboard/employee').then((res) => setData(res.data));
     axiosClient.get('/quiz/attempts/mine').then((res) => setAttempts(res.data));
+    axiosClient.get('/training/my-overall-progress').then((res) => setMyProgress(res.data));
   }, []);
 
   const widgets = data?.widgets;
@@ -71,18 +73,55 @@ export default function EmployeeDashboard() {
         </div>
 
         <div className="card" style={{ marginBottom: 24 }}>
+          <h3 className="dashboard-section-title">Your Training Progress</h3>
+          <p className="dashboard-section-desc" style={{ marginBottom: 14 }}>
+            Level progress and hazard puzzle completion for each module assigned to you.
+          </p>
+
+          {myProgress.length === 0 && (
+            <p className="dashboard-subtitle">No modules assigned yet.</p>
+          )}
+
+          {myProgress.map((m) => (
+            <div key={m.moduleId} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '12px 14px', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 10,
+            }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{m.title}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--text-600)', marginTop: 2 }}>
+                  {m.levelSummary && (
+                    <span>Quiz: Level {m.levelSummary.passedLevels} of {m.levelSummary.totalLevels} passed</span>
+                  )}
+                  {m.levelSummary && m.totalPuzzles > 0 && ' · '}
+                  {m.totalPuzzles > 0 && (
+                    <span>Puzzles: {m.attemptedPuzzles} of {m.totalPuzzles} attempted</span>
+                  )}
+                </div>
+              </div>
+              <span className="role-pill" style={{
+                background: m.status === 'completed' ? '#DCFCE7' : m.status === 'in_progress' ? '#FEF3C7' : '#F1F5F9',
+                color: m.status === 'completed' ? '#16A34A' : m.status === 'in_progress' ? '#B45309' : 'var(--text-600)',
+              }}>
+                {m.status === 'completed' ? 'Completed' : m.status === 'in_progress' ? 'In Progress' : 'Not Started'}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div className="card" style={{ marginBottom: 24 }}>
           <h3 className="dashboard-section-title">My quiz history</h3>
           <p className="dashboard-section-desc">
             Every quiz you've taken, scored automatically and saved here the moment you submit.
           </p>
           <table className="data-table">
             <thead>
-              <tr><th>Module</th><th>Score</th><th>Result</th><th>Date</th></tr>
+              <tr><th>Module</th><th>Level</th><th>Score</th><th>Result</th><th>Date</th></tr>
             </thead>
             <tbody>
               {attempts.length === 0 && (
                 <tr>
-                  <td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-400)', padding: 24 }}>
+                  <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-400)', padding: 24 }}>
                     You haven't taken any quizzes yet.
                   </td>
                 </tr>
@@ -90,6 +129,7 @@ export default function EmployeeDashboard() {
               {attempts.map((a) => (
                 <tr key={a.attempt_id}>
                   <td>{a.module_title}</td>
+                  <td>{a.level ? `Level ${a.level}` : '—'}</td>
                   <td>{a.score}%</td>
                   <td>
                     <span className="role-pill" style={{

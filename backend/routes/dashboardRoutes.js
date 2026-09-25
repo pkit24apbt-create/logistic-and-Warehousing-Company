@@ -15,11 +15,9 @@ router.get('/employee', verifyToken, requireRole(['employee', 'administrator']),
         [userId]
       ),
       query(
-        `SELECT COUNT(DISTINCT m.module_id)::int AS count
-         FROM quiz_attempts qa
-         JOIN quizzes q ON qa.quiz_id = q.quiz_id
-         JOIN training_modules m ON q.module_id = m.module_id
-         WHERE qa.user_id = $1 AND qa.passed = TRUE`,
+        `SELECT COUNT(*)::int AS count
+         FROM module_progress mp
+         WHERE mp.user_id = $1 AND mp.status = 'completed'`,
         [userId]
       ),
     ]);

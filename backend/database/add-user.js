@@ -6,11 +6,11 @@
 //   node database/add-user.js
 
 require('dotenv').config();
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const { query, pool } = require('../config/db');
 
 const NEW_USER = {
-  fullName: 'Second Admin',
+  fullName: 'First Admin',
   email: 'admin@company.com',
   password: 'password123!',
   role: 'administrator', // one of: employee, trainer, supervisor, administrator

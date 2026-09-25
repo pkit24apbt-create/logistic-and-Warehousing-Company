@@ -1,9 +1,13 @@
 const express = require('express');
 const { query } = require('../config/db');
 const { verifyToken, requireRole } = require('../middleware/authMiddleware');
+const { updateModuleCompletion } = require('../utils/moduleCompletion');
 
 const router = express.Router();
 
+// GET /api/hazard/module/:moduleId/scenes — lists every puzzle attached to
+// a module (a module can now have more than one). Used to show a card per
+// puzzle on the module page, instead of assuming there is only ever one.
 router.get('/module/:moduleId/scenes', verifyToken, async (req, res) => {
   try {
     const { moduleId } = req.params;
@@ -32,6 +36,8 @@ router.get('/module/:moduleId/scenes', verifyToken, async (req, res) => {
   }
 });
 
+// GET /api/hazard/scene/:sceneId/play — employee-facing: the image, the
+// intro tips, and the hazard count, WITHOUT revealing hotspot locations.
 router.get('/scene/:sceneId/play', verifyToken, async (req, res) => {
   try {
     const { sceneId } = req.params;
@@ -61,10 +67,13 @@ router.get('/scene/:sceneId/play', verifyToken, async (req, res) => {
   }
 });
 
+// POST /api/hazard/scene/:sceneId/submit — server-side scoring: checks the
+// employee's clicked points against the real hotspot locations, which are
+// never sent to the browser until after this runs.
 router.post('/scene/:sceneId/submit', verifyToken, requireRole(['employee']), async (req, res) => {
   try {
     const { sceneId } = req.params;
-    const { clicks } = req.body;
+    const { clicks } = req.body; // [{x, y}, ...] percentages
     const { userId } = req.user;
 
     const sceneResult = await query('SELECT module_id FROM hazard_scenes WHERE scene_id = $1', [sceneId]);
@@ -84,7 +93,7 @@ router.post('/scene/:sceneId/submit', verifyToken, requireRole(['employee']), as
       [sceneId]
     );
     const hotspots = hotspotsResult.rows;
-    const TOLERANCE = 8;
+    const TOLERANCE = 8; // percentage points of "close enough"
 
     const found = new Set();
     (clicks || []).forEach((click) => {
@@ -105,11 +114,16 @@ router.post('/scene/:sceneId/submit', verifyToken, requireRole(['employee']), as
       [sceneId, userId, foundCount, totalCount, score]
     );
 
+    // Recalculate overall module completion — checks BOTH every quiz
+    // level AND every hazard puzzle together, not just this puzzle alone.
+    const isModuleComplete = await updateModuleCompletion(userId, module_id);
+
     res.json({
       score,
       foundCount,
       totalCount,
       hotspots: hotspots.map((h) => ({ ...h, wasFound: found.has(h.hotspot_id) })),
+      isModuleComplete,
     });
   } catch (err) {
     console.error('Submit hazard attempt error:', err);
@@ -117,6 +131,8 @@ router.post('/scene/:sceneId/submit', verifyToken, requireRole(['employee']), as
   }
 });
 
+// GET /api/hazard/scene/:sceneId/manage — trainer/admin: loads a specific
+// scene's existing data for editing.
 router.get('/scene/:sceneId/manage', verifyToken, requireRole(['trainer', 'administrator']), async (req, res) => {
   try {
     const { sceneId } = req.params;
@@ -150,6 +166,9 @@ router.get('/scene/:sceneId/manage', verifyToken, requireRole(['trainer', 'admin
   }
 });
 
+// POST /api/hazard/module/:moduleId/scenes — trainer/admin: creates a NEW
+// additional puzzle for a module. Calling this again for the same module
+// adds a second (or third) puzzle rather than replacing the first.
 router.post('/module/:moduleId/scenes', verifyToken, requireRole(['trainer', 'administrator']), async (req, res) => {
   try {
     const { moduleId } = req.params;
@@ -187,6 +206,8 @@ router.post('/module/:moduleId/scenes', verifyToken, requireRole(['trainer', 'ad
   }
 });
 
+// PUT /api/hazard/scene/:sceneId — trainer/admin: updates an existing
+// puzzle's title, image, tips, and full hotspot set.
 router.put('/scene/:sceneId', verifyToken, requireRole(['trainer', 'administrator']), async (req, res) => {
   try {
     const { sceneId } = req.params;
@@ -225,6 +246,8 @@ router.put('/scene/:sceneId', verifyToken, requireRole(['trainer', 'administrato
   }
 });
 
+// DELETE /api/hazard/scene/:sceneId — trainer/admin: removes one puzzle,
+// leaving any other puzzles on the same module untouched.
 router.delete('/scene/:sceneId', verifyToken, requireRole(['trainer', 'administrator']), async (req, res) => {
   try {
     const { sceneId } = req.params;

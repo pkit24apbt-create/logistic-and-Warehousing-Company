@@ -64,9 +64,14 @@ export default function ModuleList() {
               <p className="dashboard-subtitle" style={{ margin: '8px 0 14px' }}>
                 {m.topic || 'General'} {m.is_mandatory && '· Mandatory'}
               </p>
+              {isAdmin && (
+                <p style={{ fontSize: 12, color: 'var(--text-600)', margin: '-8px 0 4px' }}>
+                  Created by <strong>{m.created_by_name || 'Administrator'}</strong>
+                </p>
+              )}
               {isAdmin && m.owner_name && (
-                <p style={{ fontSize: 12, color: 'var(--text-600)', margin: '-8px 0 14px' }}>
-                  Created by <strong>{m.owner_name}</strong>
+                <p style={{ fontSize: 12, color: 'var(--text-600)', margin: '0 0 14px' }}>
+                  Managed by <strong>{m.owner_name}</strong>
                 </p>
               )}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

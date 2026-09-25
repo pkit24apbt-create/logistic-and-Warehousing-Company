@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import axiosClient from '../api/axiosClient';
+import { useAuth } from '../context/AuthContext';
 
 function buildContentBlocks(contentBody, images) {
   const paragraphs = (contentBody || '').split(/\n\s*\n/).filter((p) => p.trim().length > 0);
@@ -52,13 +53,20 @@ function SectionDivider() {
 
 export default function ModuleDetail() {
   const { id } = useParams();
+  const { user } = useAuth();
   const [module, setModule] = useState(null);
   const [hazardScenes, setHazardScenes] = useState([]);
+  const [myProgress, setMyProgress] = useState(null);
 
   useEffect(() => {
     axiosClient.get(`/training/${id}`).then((res) => setModule(res.data));
     axiosClient.get(`/hazard/module/${id}/scenes`).then((res) => setHazardScenes(res.data)).catch(() => setHazardScenes([]));
-  }, [id]);
+    // The combined score endpoint is employee-only — only call it for
+    // Employees, so Admin/Trainer/Supervisor never hit a 403 here at all.
+    if (user?.role === 'employee') {
+      axiosClient.get(`/training/${id}/my-progress`).then((res) => setMyProgress(res.data)).catch(() => setMyProgress(null));
+    }
+  }, [id, user?.role]);
 
   if (!module) return <div><Navbar /><main className="dashboard">Loading…</main></div>;
 
@@ -76,6 +84,50 @@ export default function ModuleDetail() {
           )}
         </div>
         <p className="dashboard-subtitle">{module.topic} {module.is_mandatory && '· Mandatory training'}</p>
+
+        {myProgress && myProgress.overallScore !== null && (
+          <div className="card" style={{
+            marginBottom: 20, maxWidth: 640,
+            background: myProgress.isModuleComplete ? '#F0FDF4' : 'var(--primary-light)',
+            border: `1px solid ${myProgress.isModuleComplete ? '#16A34A' : 'var(--primary)'}`,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ margin: 0 }}>Your Module Score</h3>
+              <span style={{ fontSize: 28, fontWeight: 800, color: myProgress.isModuleComplete ? '#16A34A' : 'var(--primary-dark)' }}>
+                {myProgress.overallScore}%
+              </span>
+            </div>
+            <p className="dashboard-subtitle" style={{ margin: '0 0 10px' }}>
+              {myProgress.isModuleComplete
+                ? 'You have completed every part of this module.'
+                : 'This is your combined score so far. Complete every quiz and puzzle to finish the module.'}
+            </p>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 13 }}>
+              {myProgress.hasQuiz && (
+                <div>
+                  <strong>Quiz:</strong>{' '}
+                  {myProgress.quizScore === null ? (
+                    <span style={{ color: 'var(--text-400)' }}>Not attempted</span>
+                  ) : (
+                    <span style={{ color: myProgress.quizPassed ? '#16A34A' : '#DC2626' }}>
+                      {myProgress.quizScore}% {myProgress.quizPassed ? '(Passed)' : '(Not yet passed)'}
+                    </span>
+                  )}
+                </div>
+              )}
+              {myProgress.puzzles.map((p, i) => (
+                <div key={p.sceneId}>
+                  <strong>Puzzle {i + 1}:</strong>{' '}
+                  {p.bestScore === null ? (
+                    <span style={{ color: 'var(--text-400)' }}>Not attempted</span>
+                  ) : (
+                    <span style={{ color: 'var(--primary-dark)' }}>{p.bestScore}%</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="card" style={{ marginBottom: 20, paddingTop: 28 }}>
           {module.media_url && module.content_type === 'video' && (
