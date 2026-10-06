@@ -61,8 +61,6 @@ export default function ModuleDetail() {
   useEffect(() => {
     axiosClient.get(`/training/${id}`).then((res) => setModule(res.data));
     axiosClient.get(`/hazard/module/${id}/scenes`).then((res) => setHazardScenes(res.data)).catch(() => setHazardScenes([]));
-    // The combined score endpoint is employee-only — only call it for
-    // Employees, so Admin/Trainer/Supervisor never hit a 403 here at all.
     if (user?.role === 'employee') {
       axiosClient.get(`/training/${id}/my-progress`).then((res) => setMyProgress(res.data)).catch(() => setMyProgress(null));
     }
@@ -100,8 +98,21 @@ export default function ModuleDetail() {
             <p className="dashboard-subtitle" style={{ margin: '0 0 10px' }}>
               {myProgress.isModuleComplete
                 ? 'You have completed every part of this module.'
-                : 'This is your combined score so far. Complete every quiz and puzzle to finish the module.'}
+                : 'This is your combined score so far. Complete every quiz level, then the puzzle, to finish the module.'}
             </p>
+            {myProgress.competencyLevel && (
+              <div style={{ marginBottom: 12 }}>
+                <span className="role-pill" style={{
+                  background: myProgress.competencyLevel === 'proficient' ? '#DCFCE7'
+                    : myProgress.competencyLevel === 'competent' ? '#FEF3C7' : '#F1F5F9',
+                  color: myProgress.competencyLevel === 'proficient' ? '#16A34A'
+                    : myProgress.competencyLevel === 'competent' ? '#B45309' : 'var(--text-600)',
+                  fontSize: 13, padding: '6px 14px',
+                }}>
+                  Competency: {myProgress.competencyLevel.charAt(0).toUpperCase() + myProgress.competencyLevel.slice(1)}
+                </span>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 13 }}>
               {myProgress.hasQuiz && (
                 <div>
@@ -185,7 +196,7 @@ export default function ModuleDetail() {
             <div className="card" style={{ marginBottom: 16 }}>
               <h3 style={{ marginTop: 0 }}>Knowledge check</h3>
               <p className="dashboard-subtitle">
-                {Math.round(module.quiz.time_limit_sec / 60)} min · Pass mark {module.quiz.passing_score}%
+                {Math.round(module.quiz.time_limit_sec / 60)} min · Pass mark {module.quiz.passing_score}% per level
               </p>
               <Link to={`/modules/${id}/quiz`} className="auth-btn-primary" style={{ display: 'inline-block', width: 'auto', padding: '10px 24px', textDecoration: 'none' }}>
                 Take Quiz

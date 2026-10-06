@@ -21,6 +21,10 @@ import HazardPuzzle from './pages/HazardPuzzle';
 import VirtualTour from './pages/VirtualTour';
 import Reports from './pages/Reports';
 
+// Sprint 4
+import CertificateView from './pages/CertificateView';
+import AdminManagement from './pages/AdminManagement';
+
 export default function App() {
   return (
     <AuthProvider>
@@ -144,6 +148,22 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['supervisor', 'administrator']}>
                 <Reports />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/certificates/:id"
+            element={
+              <ProtectedRoute allowedRoles={['employee', 'supervisor', 'administrator']}>
+                <CertificateView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/management"
+            element={
+              <ProtectedRoute allowedRoles={['administrator']}>
+                <AdminManagement />
               </ProtectedRoute>
             }
           />

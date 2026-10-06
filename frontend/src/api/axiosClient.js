@@ -15,7 +15,12 @@ axiosClient.interceptors.request.use((config) => {
 axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && [401, 403].includes(error.response.status)) {
+    // Only a missing, invalid or expired login TOKEN signs the user out. A 403
+    // ("you are not allowed to do that") or a 401 such as "current password is
+    // incorrect" must reach the page so it can show its message.
+    const status = error.response && error.response.status;
+    const code = error.response && error.response.data && error.response.data.code;
+    if (status === 401 && code === 'AUTH_REQUIRED') {
       localStorage.removeItem('safestack_token');
       localStorage.removeItem('safestack_user');
       if (window.location.pathname !== '/login') {

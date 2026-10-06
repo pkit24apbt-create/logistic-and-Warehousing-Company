@@ -12,6 +12,7 @@ const quizRoutes = require('./routes/quizRoutes');
 const hazardRoutes = require('./routes/hazardRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const tourRoutes = require('./routes/tourRoutes');
+const managementRoutes = require('./routes/managementRoutes');
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.use('/api/quiz', quizRoutes);
 app.use('/api/hazard', hazardRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/tour', tourRoutes);
+app.use('/api/management', managementRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', service: 'safestack-backend' }));
 

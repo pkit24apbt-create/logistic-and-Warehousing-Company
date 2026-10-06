@@ -434,7 +434,8 @@ router.get('/:id/employees', verifyToken, requireRole(['trainer', 'administrator
 // GET /api/training/:id/my-progress — Employee-only: combines their best
 // quiz score with the average of their best score on every puzzle
 // attached to this module, into one overall module mark. Shows whether
-// the module is fully complete (quiz passed AND every puzzle attempted).
+// the module is fully complete (quiz passed AND every puzzle attempted),
+// and includes the calculated competency level for this module.
 router.get('/:id/my-progress', verifyToken, requireRole(['employee']), async (req, res) => {
   try {
     const { id } = req.params;
@@ -482,6 +483,12 @@ router.get('/:id/my-progress', verifyToken, requireRole(['employee']), async (re
     const allPuzzlesDone = puzzles.length === 0 || puzzles.every((p) => p.best_score !== null);
     const isModuleComplete = quizDone && allPuzzlesDone && overallScore !== null;
 
+    const competencyResult = await query(
+      'SELECT level, overall_score FROM competency_levels WHERE user_id = $1 AND module_id = $2',
+      [userId, id]
+    );
+    const competency = competencyResult.rows[0] || { level: 'novice', overall_score: null };
+
     res.json({
       quizScore: quizScore ?? null,
       quizPassed: quizPassed ?? null,
@@ -490,6 +497,7 @@ router.get('/:id/my-progress', verifyToken, requireRole(['employee']), async (re
       puzzleAverage,
       overallScore,
       isModuleComplete,
+      competencyLevel: competency.level,
     });
   } catch (err) {
     console.error('Get my progress error:', err);

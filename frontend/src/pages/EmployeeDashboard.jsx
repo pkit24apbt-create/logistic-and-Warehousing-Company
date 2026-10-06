@@ -5,17 +5,20 @@ import Navbar from '../components/Navbar';
 import Topbar from '../components/Topbar';
 import ProgressRing from '../components/ProgressRing';
 import TourPreviewCard from '../components/TourPreviewCard';
+import { CompetencyPill, StatusPill, formatDate } from '../components/UiBits';
 import axiosClient from '../api/axiosClient';
 
 export default function EmployeeDashboard() {
   const [data, setData] = useState(null);
   const [attempts, setAttempts] = useState([]);
   const [myProgress, setMyProgress] = useState([]);
+  const [certificates, setCertificates] = useState([]);
 
   useEffect(() => {
     axiosClient.get('/dashboard/employee').then((res) => setData(res.data));
     axiosClient.get('/quiz/attempts/mine').then((res) => setAttempts(res.data));
     axiosClient.get('/training/my-overall-progress').then((res) => setMyProgress(res.data));
+    axiosClient.get('/management/certificates/mine').then((res) => setCertificates(res.data)).catch(() => setCertificates([]));
   }, []);
 
   const widgets = data?.widgets;
@@ -105,6 +108,39 @@ export default function EmployeeDashboard() {
               }}>
                 {m.status === 'completed' ? 'Completed' : m.status === 'in_progress' ? 'In Progress' : 'Not Started'}
               </span>
+            </div>
+          ))}
+        </div>
+
+        <div className="card" style={{ marginBottom: 24 }}>
+          <h3 className="dashboard-section-title">My certificates</h3>
+          <p className="dashboard-section-desc" style={{ marginBottom: 14 }}>
+            Earned automatically when you complete a module at Competent level or better.
+          </p>
+
+          {certificates.length === 0 && (
+            <p className="dashboard-subtitle">
+              No certificates yet — finish every quiz level and puzzle in a module to earn one.
+            </p>
+          )}
+
+          {certificates.map((c) => (
+            <div key={c.certificate_id} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10,
+              padding: '12px 14px', border: '1px solid var(--border)', borderLeft: '4px solid var(--accent)',
+              borderRadius: 8, marginBottom: 10,
+            }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{c.module_title}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--text-600)', marginTop: 2 }}>
+                  Issued {formatDate(c.issued_date)} · {c.expiry_date ? `Valid until ${formatDate(c.expiry_date)}` : 'No expiry'} · {c.cert_code}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <CompetencyPill value={c.competency_level} />
+                <StatusPill value={c.effective_status} />
+                <Link to={`/certificates/${c.certificate_id}`} className="btn-secondary">View</Link>
+              </div>
             </div>
           ))}
         </div>
