@@ -1,47 +1,55 @@
-// Adds one user account directly, with any role. Use this until Sprint 4's
-// Admin > Users & Roles panel is built (that will let your Administrator
-// do this from the browser instead of the terminal).
+// Adds one user account directly from the terminal, with any role.
+// The Administrator can also do this from the browser (Users & Roles page);
+// this script is only for creating the very first account or for emergencies.
 //
-// EDIT the NEW_USER values below, then run:
-//   node database/add-user.js
+// USAGE (from the backend folder):
+//   node database/add-user.js "Full Name" email@company.com "A-Strong-Password1" administrator
+//
+// The last value is the role: employee, trainer, supervisor or administrator.
+// The password is typed on the command line, so it is never saved in this file.
 
 require('dotenv').config();
 const bcrypt = require('bcryptjs');
 const { query, pool } = require('../config/db');
 
-const NEW_USER = {
-  fullName: 'First Admin',
-  email: 'admin@company.com',
-  password: 'password123!',
-  role: 'administrator', // one of: employee, trainer, supervisor, administrator
-};
+const [fullName, email, password, role] = process.argv.slice(2);
 
 async function run() {
-  const roleResult = await query('SELECT role_id FROM roles WHERE role_name = $1', [NEW_USER.role]);
+  if (!fullName || !email || !password || !role) {
+    console.error('Usage: node database/add-user.js "Full Name" email@company.com "Password" role');
+    console.error('Roles: employee, trainer, supervisor, administrator');
+    await pool.end();
+    process.exit(1);
+  }
+  if (password.length < 8) {
+    console.error('The password must be at least 8 characters.');
+    await pool.end();
+    process.exit(1);
+  }
+
+  const roleResult = await query('SELECT role_id FROM roles WHERE role_name = $1', [role]);
   if (roleResult.rows.length === 0) {
-    console.error(`Role '${NEW_USER.role}' not found. Valid roles: employee, trainer, supervisor, administrator`);
+    console.error(`Role '${role}' not found. Valid roles: employee, trainer, supervisor, administrator`);
     await pool.end();
-    return;
+    process.exit(1);
   }
 
-  const existing = await query('SELECT user_id FROM users WHERE email = $1', [NEW_USER.email]);
+  const existing = await query('SELECT user_id FROM users WHERE email = $1', [email]);
   if (existing.rows.length > 0) {
-    console.error(`An account with email '${NEW_USER.email}' already exists.`);
+    console.error(`An account with email '${email}' already exists.`);
     await pool.end();
-    return;
+    process.exit(1);
   }
 
-  const passwordHash = await bcrypt.hash(NEW_USER.password, 10);
+  const passwordHash = await bcrypt.hash(password, 10);
 
   await query(
     `INSERT INTO users (role_id, full_name, email, password_hash, status)
      VALUES ($1, $2, $3, $4, 'active')`,
-    [roleResult.rows[0].role_id, NEW_USER.fullName, NEW_USER.email, passwordHash]
+    [roleResult.rows[0].role_id, fullName, email, passwordHash]
   );
 
-  console.log(`Created ${NEW_USER.role}: ${NEW_USER.email}`);
-  console.log(`Password: ${NEW_USER.password}`);
-
+  console.log(`Created ${role}: ${email}`);
   await pool.end();
 }
 

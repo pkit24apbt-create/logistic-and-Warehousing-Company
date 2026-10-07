@@ -56,3 +56,40 @@ export function buildSphereData(radius, widthSegments, heightSegments) {
 
   return { positions, uvs, indices };
 }
+
+// ---- picking: turn a click direction back into image coordinates ----------
+
+// Direction (any length) -> lon/lat in degrees, lon in [0, 360).
+export function directionToLonLat(x, y, z) {
+  const len = Math.hypot(x, y, z) || 1;
+  const lat = Math.asin(clamp(y / len, -1, 1)) / DEG;
+  let lon = Math.atan2(z, x) / DEG;
+  if (lon < 0) lon += 360;
+  return { lon, lat };
+}
+
+// lon/lat in degrees -> position on the image as percentages (0-100).
+export function lonLatToPercent(lon, lat) {
+  const wrapped = ((lon % 360) + 360) % 360;
+  return { x: (wrapped / 360) * 100, y: ((90 - lat) / 180) * 100 };
+}
+
+// The exact inverse of hotspotLonLat + directionFromLonLat.
+export function percentFromDirection(x, y, z) {
+  const { lon, lat } = directionToLonLat(x, y, z);
+  return lonLatToPercent(lon, lat);
+}
+
+export function percentToDirection(xPercent, yPercent) {
+  const { lon, lat } = hotspotLonLat(xPercent, yPercent);
+  return directionFromLonLat(lon, lat);
+}
+
+// Angle in degrees between two image points {x, y} (percentages).
+// Handles the left/right wrap-around and the stretching near the poles.
+export function angularDistanceDeg(a, b) {
+  const da = percentToDirection(a.x, a.y);
+  const db = percentToDirection(b.x, b.y);
+  const dot = clamp(da[0] * db[0] + da[1] * db[1] + da[2] * db[2], -1, 1);
+  return Math.acos(dot) / DEG;
+}

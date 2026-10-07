@@ -78,7 +78,7 @@ export default function EmployeeDashboard() {
         <div className="card" style={{ marginBottom: 24 }}>
           <h3 className="dashboard-section-title">Your Training Progress</h3>
           <p className="dashboard-section-desc" style={{ marginBottom: 14 }}>
-            Level progress and hazard puzzle completion for each module assigned to you.
+            Level progress and puzzle completion for each module assigned to you.
           </p>
 
           {myProgress.length === 0 && (

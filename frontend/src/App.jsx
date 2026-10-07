@@ -16,6 +16,7 @@ import AdminUsers from './pages/AdminUsers';
 import ModuleList from './pages/ModuleList';
 import ModuleDetail from './pages/ModuleDetail';
 import ModuleEditor from './pages/ModuleEditor';
+import ModuleAssign from './pages/ModuleAssign';
 import QuizPage from './pages/QuizPage';
 import HazardPuzzle from './pages/HazardPuzzle';
 import VirtualTour from './pages/VirtualTour';
@@ -116,6 +117,14 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['trainer', 'administrator']}>
                 <ModuleEditor />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/modules/:id/assign"
+            element={
+              <ProtectedRoute allowedRoles={['trainer', 'administrator']}>
+                <ModuleAssign />
               </ProtectedRoute>
             }
           />

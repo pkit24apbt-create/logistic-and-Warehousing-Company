@@ -42,20 +42,20 @@ const REPORTS = [
   {
     key: 'assessment',
     label: 'Assessment Performance',
-    description: 'Quiz and hazard puzzle results for each module.',
+    description: 'Quiz and puzzle results for each module (hazard hunts, 360° hunts, sequencing and matching).',
     columns: [
       { label: 'Module', field: 'title' },
       { label: 'Quiz attempts', field: 'quiz_attempts', type: 'number' },
       { label: 'Pass rate', field: 'pass_rate', type: 'percent' },
       { label: 'Avg quiz score', field: 'avg_quiz_score', type: 'percent' },
-      { label: 'Hazard attempts', field: 'hazard_attempts', type: 'number' },
-      { label: 'Avg hazard score', field: 'avg_hazard_score', type: 'percent' },
+      { label: 'Puzzle attempts', field: 'hazard_attempts', type: 'number' },
+      { label: 'Avg puzzle score', field: 'avg_hazard_score', type: 'percent' },
     ],
     summarise: (rows) => [
       ['Quiz attempts', sum(rows, 'quiz_attempts')],
-      ['Hazard attempts', sum(rows, 'hazard_attempts')],
+      ['Puzzle attempts', sum(rows, 'hazard_attempts')],
       ['Avg quiz score', pct(average(rows, 'avg_quiz_score'))],
-      ['Avg hazard score', pct(average(rows, 'avg_hazard_score'))],
+      ['Avg puzzle score', pct(average(rows, 'avg_hazard_score'))],
     ],
   },
   {

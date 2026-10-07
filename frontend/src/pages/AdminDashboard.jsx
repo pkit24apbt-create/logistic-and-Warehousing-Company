@@ -83,6 +83,7 @@ export default function AdminDashboard() {
               <Link to="/admin/users" className="btn-secondary" style={{ justifyContent: 'flex-start' }}>Manage Users</Link>
               <Link to="/modules" className="btn-secondary" style={{ justifyContent: 'flex-start' }}>View Training Modules</Link>
               <Link to="/reports" className="btn-secondary" style={{ justifyContent: 'flex-start' }}>Open Reports</Link>
+              <Link to="/admin/management" className="btn-secondary" style={{ justifyContent: 'flex-start' }}>Certificates &amp; Settings</Link>
             </div>
           </div>
         </div>

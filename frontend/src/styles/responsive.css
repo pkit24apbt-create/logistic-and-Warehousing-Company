@@ -1,0 +1,69 @@
+/* ============================================================
+   RESPONSIVE LAYOUT - phones and tablets
+   Loaded after global.css. Desktop (wider than 900px) is untouched.
+   ============================================================ */
+
+@media (max-width: 900px) {
+  /* The left sidebar becomes a bar across the top of the page. */
+  .sidebar {
+    position: static;
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .sidebar-brand {
+    padding: 10px 14px;
+    border-bottom: none;
+    flex: 1 1 auto;
+  }
+  .sidebar-footer {
+    padding: 8px 14px;
+    border-top: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .sidebar-user { margin-bottom: 0; }
+  .sidebar-user-info { display: none; }
+  .sidebar-logout { width: auto; padding: 8px 12px; }
+  .sidebar-nav {
+    order: 3;
+    flex: 1 1 100%;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 6px 10px 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  .sidebar-link { white-space: nowrap; padding: 9px 12px; }
+  .sidebar-link.active { box-shadow: inset 0 -3px 0 var(--accent); }
+
+  /* Main content uses the full width. */
+  .dashboard { margin-left: 0; padding: 18px 16px; }
+  .dashboard h1 { font-size: 22px; }
+
+  /* Two-column layouts written inline in the pages stack into one column. */
+  .dashboard div[style*="280px 1fr"],
+  .dashboard div[style*="1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  .dashboard-hero { padding: 22px 20px; }
+  .dashboard-hero-icon { display: none; }
+
+  /* Wide tables scroll sideways instead of breaking the page. */
+  .card { overflow-x: auto; }
+  .data-table { min-width: 560px; }
+}
+
+@media (max-width: 520px) {
+  .dashboard { padding: 14px 12px; }
+  .card { padding: 16px; }
+  .dashboard input[type="text"],
+  .dashboard input[type="search"],
+  .dashboard select { max-width: 100%; }
+  .dashboard input[style*="width: 260px"] { width: 100% !important; }
+}

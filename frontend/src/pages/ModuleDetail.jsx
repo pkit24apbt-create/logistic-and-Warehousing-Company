@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import axiosClient from '../api/axiosClient';
 import { useAuth } from '../context/AuthContext';
+import { attemptsLabel, retryLabel, sizeLabel, typeInfo } from '../utils/puzzleUi';
 
 function buildContentBlocks(contentBody, images) {
   const paragraphs = (contentBody || '').split(/\n\s*\n/).filter((p) => p.trim().length > 0);
@@ -98,7 +99,7 @@ export default function ModuleDetail() {
             <p className="dashboard-subtitle" style={{ margin: '0 0 10px' }}>
               {myProgress.isModuleComplete
                 ? 'You have completed every part of this module.'
-                : 'This is your combined score so far. Complete every quiz level, then the puzzle, to finish the module.'}
+                : 'This is your combined score so far. Complete every quiz level, then every puzzle, to finish the module.'}
             </p>
             {myProgress.competencyLevel && (
               <div style={{ marginBottom: 12 }}>
@@ -205,28 +206,41 @@ export default function ModuleDetail() {
           )}
 
           {hazardScenes.length > 0 && (
-            <div className="card">
-              <h3 style={{ marginTop: 0 }}>Hazard Hunt{hazardScenes.length > 1 ? ` — ${hazardScenes.length} puzzles` : ''}</h3>
-              <p className="dashboard-subtitle" style={{ marginBottom: 14 }}>Find the hidden hazards in each scene.</p>
+            <div className="card" data-testid="puzzle-card">
+              <h3 style={{ marginTop: 0 }}>Puzzles{hazardScenes.length > 1 ? ` — ${hazardScenes.length} to play` : ''}</h3>
+              <p className="dashboard-subtitle" style={{ marginBottom: 14 }}>Play every puzzle to complete this module. Your best score for each one counts.</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {hazardScenes.map((scene, i) => (
-                  <div key={scene.scene_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 8 }}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 13.5 }}>{hazardScenes.length > 1 ? `Puzzle ${i + 1}: ` : ''}{scene.title}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-600)' }}>{scene.hazard_count} hazards to find</div>
+                {hazardScenes.map((scene, i) => {
+                  const noneLeft = scene.attempts_left !== undefined && scene.attempts_left !== null && scene.attempts_left <= 0;
+                  const attempts = scene.attempts_left === undefined ? null : { unlimited: scene.attempts_left === null, left: scene.attempts_left, max: scene.max_attempts };
+                  return (
+                    <div key={scene.scene_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 8 }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 13.5 }}>
+                          {hazardScenes.length > 1 ? `Puzzle ${i + 1}: ` : ''}{scene.title}{' '}
+                          <span className="role-pill" style={{ background: 'var(--primary-light)', color: 'var(--primary-dark)', marginLeft: 6 }}>{typeInfo(scene.puzzle_type).short}</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-600)' }}>
+                          {sizeLabel(scene.puzzle_type, scene.item_count)}
+                          {scene.time_limit_sec ? ` · timed (${Math.floor(scene.time_limit_sec / 60)}:${String(scene.time_limit_sec % 60).padStart(2, '0')})` : ''}
+                          {attempts ? ` · ${attemptsLabel(attempts)}` : ''}
+                          {scene.best_score !== null && scene.best_score !== undefined ? ` · best score ${scene.best_score}%` : ''}
+                        </div>
+                        {noneLeft && scene.retry_at && <div style={{ fontSize: 12, color: '#DC2626' }}>{retryLabel(scene.retry_at)}</div>}
+                      </div>
+                      <Link to={`/hazard/${scene.scene_id}`} className="auth-btn-primary" style={{ width: 'auto', padding: '8px 18px', fontSize: 13, textDecoration: 'none' }}>
+                        {scene.best_score !== null && scene.best_score !== undefined ? 'Open' : 'Start'}
+                      </Link>
                     </div>
-                    <Link to={`/hazard/${scene.scene_id}`} className="auth-btn-primary" style={{ width: 'auto', padding: '8px 18px', fontSize: 13, textDecoration: 'none' }}>
-                      Start
-                    </Link>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
         </div>
 
         {!module.quiz && hazardScenes.length === 0 && (
-          <p className="dashboard-subtitle">No quiz or hazard hunt attached to this module yet.</p>
+          <p className="dashboard-subtitle">No quiz or puzzles attached to this module yet.</p>
         )}
       </main>
     </div>
