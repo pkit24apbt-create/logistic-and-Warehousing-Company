@@ -5,13 +5,16 @@ const helmet = require('helmet');
 const rateLimitModule = require('express-rate-limit');
 const rateLimit = rateLimitModule.rateLimit || rateLimitModule;
 
-require('./config/db');
+const { query } = require('./config/db');
+const { runAutoReminders } = require('./utils/notifications');
 
 const authRoutes = require('./routes/authRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const trainingRoutes = require('./routes/trainingRoutes');
 const assignmentRoutes = require('./routes/assignmentRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const adminUserDeleteRoutes = require('./routes/adminUserDeleteRoutes');
 const quizRoutes = require('./routes/quizRoutes');
 const hazardRoutes = require('./routes/hazardRoutes');
 const reportRoutes = require('./routes/reportRoutes');
@@ -44,9 +47,11 @@ app.use('/api/auth/login', loginLimiter);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/admin', adminUserDeleteRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/training', trainingRoutes);
 app.use('/api/assignments', assignmentRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use('/api/quiz', quizRoutes);
 app.use('/api/hazard', hazardRoutes);
 app.use('/api/reports', reportRoutes);
@@ -64,3 +69,19 @@ app.use((req, res) => res.status(404).json({ error: 'Route not found.' }));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`SafeStack backend running on http://localhost:${PORT}`));
+
+// Automatic training reminders (FR19): once a minute after start-up, then every 12 hours,
+// remind people about mandatory modules they have left unfinished for a week.
+// Set AUTO_REMINDERS=off in .env to switch this off.
+if (process.env.AUTO_REMINDERS !== 'off') {
+  const runReminders = async () => {
+    try {
+      const created = await runAutoReminders(query);
+      if (created > 0) console.log(`Auto reminders: ${created} sent.`);
+    } catch (err) {
+      console.error('Auto reminders failed:', err.message);
+    }
+  };
+  setTimeout(runReminders, 60 * 1000).unref();
+  setInterval(runReminders, 12 * 60 * 60 * 1000).unref();
+}

@@ -22,6 +22,7 @@ Training platform for a warehousing company: modules, quizzes, safety puzzles, a
    1. `backend/database/database_setup.sql`
    2. `backend/database/sprint5_puzzles.sql`
    3. `backend/database/sprint5_puzzles_in_modules.sql`
+   4. `backend/database/sprint5_notifications.sql`
 4. Backend:
 ```
    cd backend

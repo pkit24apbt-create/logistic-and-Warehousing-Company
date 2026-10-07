@@ -5,6 +5,17 @@ const { updateModuleCompletion } = require('../utils/moduleCompletion');
 
 const router = express.Router();
 
+// Fisher-Yates shuffle so the correct answer is not always in the same
+// position. Returns a new array and leaves the original untouched.
+function shuffle(items) {
+  const a = [...items];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 // GET /api/quiz/module/:moduleId/levels — employee-facing: shows all 4
 // levels for this quiz, each with its best score, pass status, and
 // whether it is unlocked yet (a level unlocks once the one before it is
@@ -76,7 +87,8 @@ router.get('/module/:moduleId/levels', verifyToken, async (req, res) => {
 
 // GET /api/quiz/module/:moduleId — returns ONE specific level's questions
 // (via ?level=N), WITHOUT revealing is_correct. Defaults to level 1 if not
-// specified.
+// specified. The answer options are shuffled on every load so the correct
+// answer is not always in the same position.
 router.get('/module/:moduleId', verifyToken, async (req, res) => {
   try {
     const { moduleId } = req.params;
@@ -105,7 +117,7 @@ router.get('/module/:moduleId', verifyToken, async (req, res) => {
 
     for (const q of questions) {
       const optResult = await query('SELECT option_id, option_text FROM answer_options WHERE question_id = $1', [q.question_id]);
-      q.options = optResult.rows;
+      q.options = shuffle(optResult.rows);
     }
 
     res.json({ ...quiz, level, questions });

@@ -621,3 +621,29 @@ FROM hazard_scenes s
 JOIN training_modules m ON m.module_id = s.module_id
 WHERE s.puzzle_type IN ('sequence', 'match', 'hazard_hunt_360')
 ORDER BY m.title, s.scene_id;
+
+-- ============================================================================
+-- Sprint 5: in-app notifications (training reminders, FR19)
+-- Safe to run more than once.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS notifications (
+    notification_id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    module_id INTEGER REFERENCES training_modules(module_id) ON DELETE CASCADE,
+    kind VARCHAR(30) NOT NULL DEFAULT 'reminder',
+    title VARCHAR(200) NOT NULL,
+    message TEXT NOT NULL,
+    created_by INTEGER REFERENCES users(user_id) ON DELETE SET NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    read_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user
+    ON notifications (user_id, read_at, created_at DESC);
+
+SELECT table_name FROM information_schema.tables WHERE table_name = 'notifications';
+
+UPDATE quizzes SET passing_score = 60;
+ALTER TABLE quizzes ALTER COLUMN passing_score SET DEFAULT 60;
+SELECT quiz_id, module_id, passing_score FROM quizzes;

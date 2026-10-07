@@ -54,6 +54,7 @@ export default function ModuleAssign() {
   }, [employees, search, department, show]);
 
   const assignedCount = employees.filter((e) => e.assigned).length;
+  const unfinishedCount = employees.filter((e) => e.assigned && e.progress_status !== 'completed').length;
   const selectableVisible = visible.filter((e) => !e.assigned);
   const selectedCount = [...selected].filter((uid) => employees.some((e) => e.user_id === uid && !e.assigned)).length;
 
@@ -80,6 +81,20 @@ export default function ModuleAssign() {
       await load();
     } catch (err) {
       setError(err.response?.data?.error || 'Could not assign the module.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remind(userIds) {
+    setBusy(true);
+    setMessage('');
+    setError('');
+    try {
+      const res = await axiosClient.post(`/assignments/module/${id}/remind`, userIds ? { userIds } : {});
+      setMessage(res.data.message);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not send the reminder.');
     } finally {
       setBusy(false);
     }
@@ -149,6 +164,10 @@ export default function ModuleAssign() {
                 style={{ width: 'auto', padding: '9px 22px', fontSize: 13.5 }}>
                 {busy ? 'Working…' : `Assign to ${selectedCount} selected`}
               </button>
+              <button type="button" onClick={() => remind(null)} disabled={busy || unfinishedCount === 0}
+                style={{ ...fieldStyle, cursor: 'pointer', fontWeight: 600 }}>
+                Remind everyone who hasn&apos;t finished ({unfinishedCount})
+              </button>
             </div>
 
             <div style={{ overflowX: 'auto' }}>
@@ -177,13 +196,21 @@ export default function ModuleAssign() {
                       <td>{e.department || '—'}</td>
                       <td>
                         <span className="role-pill" style={{
-                          background: e.assigned ? '#DCFCE7' : '#F1F5F9',
-                          color: e.assigned ? '#16A34A' : 'var(--text-600)',
+                          background: !e.assigned ? '#F1F5F9' : e.progress_status === 'completed' ? '#DCFCE7' : '#FEF3C7',
+                          color: !e.assigned ? 'var(--text-600)' : e.progress_status === 'completed' ? '#16A34A' : '#B45309',
                         }}>
-                          {e.assigned ? 'Assigned' : 'Not assigned'}
+                          {!e.assigned ? 'Not assigned'
+                            : e.progress_status === 'completed' ? 'Completed'
+                            : e.progress_status === 'in_progress' ? 'In progress' : 'Not started'}
                         </span>
                       </td>
-                      <td style={{ textAlign: 'right' }}>
+                      <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        {e.assigned && e.progress_status !== 'completed' && (
+                          <button type="button" onClick={() => remind([e.user_id])} disabled={busy}
+                            style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 12px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', marginRight: 6 }}>
+                            Remind
+                          </button>
+                        )}
                         {e.assigned && (
                           <button type="button" onClick={() => unassign(e)} disabled={busy}
                             style={{ background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: 6, padding: '5px 12px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit' }}>

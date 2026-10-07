@@ -107,7 +107,14 @@ router.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { userId: user.user_id, role: user.role_name, fullName: user.full_name },
+      {
+        userId: user.user_id,
+        role: user.role_name,
+        fullName: user.full_name,
+        // While this is true the server only lets the user reach the
+        // change-password screen (see middleware/authMiddleware.js).
+        mustChangePassword: Boolean(user.must_change_password),
+      },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
     );
@@ -142,16 +149,25 @@ router.post('/change-password', verifyToken, async (req, res) => {
   if (newPassword.length < 8) {
     return res.status(400).json({ error: 'New password must be at least 8 characters.' });
   }
+  if (newPassword === currentPassword) {
+    return res.status(400).json({ error: 'Your new password must be different from the current one.' });
+  }
 
   try {
-    const result = await query('SELECT password_hash FROM users WHERE user_id = $1', [req.user.userId]);
+    const result = await query(
+      `SELECT u.password_hash, u.full_name, r.role_name
+       FROM users u JOIN roles r ON r.role_id = u.role_id
+       WHERE u.user_id = $1`,
+      [req.user.userId]
+    );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found.' });
     }
+    const row = result.rows[0];
 
-    const matches = await bcrypt.compare(currentPassword, result.rows[0].password_hash);
+    const matches = await bcrypt.compare(currentPassword, row.password_hash);
     if (!matches) {
-      return res.status(401).json({ error: 'Current password is incorrect.' });
+      return res.status(400).json({ error: 'Current password is incorrect.' });
     }
 
     const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
@@ -160,7 +176,15 @@ router.post('/change-password', verifyToken, async (req, res) => {
       [newHash, req.user.userId]
     );
 
-    res.json({ message: 'Password updated successfully.' });
+    // A fresh token without the "must change password" restriction, so the
+    // user can carry on straight away.
+    const token = jwt.sign(
+      { userId: req.user.userId, role: row.role_name, fullName: row.full_name, mustChangePassword: false },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
+    );
+
+    res.json({ message: 'Password updated successfully.', token });
   } catch (err) {
     console.error('Change password error:', err);
     res.status(500).json({ error: 'Something went wrong changing your password.' });

@@ -1,6 +1,7 @@
 const express = require('express');
 const { query } = require('../config/db');
 const { verifyToken, requireRole } = require('../middleware/authMiddleware');
+const { notify, unfinishedAssignees, sendManualReminders } = require('../utils/notifications');
 
 const router = express.Router();
 
@@ -38,10 +39,12 @@ router.get('/module/:id', async (req, res) => {
     const result = await query(
       `SELECT u.user_id, u.full_name, u.email, u.department,
               a.assigned_at,
-              CASE WHEN a.assignment_id IS NULL THEN FALSE ELSE TRUE END AS assigned
+              CASE WHEN a.assignment_id IS NULL THEN FALSE ELSE TRUE END AS assigned,
+              CASE WHEN a.assignment_id IS NULL THEN NULL ELSE COALESCE(mp.status, 'not_started') END AS progress_status
        FROM users u
        JOIN roles r ON r.role_id = u.role_id
        LEFT JOIN module_assignments a ON a.user_id = u.user_id AND a.module_id = $1
+       LEFT JOIN module_progress mp ON mp.user_id = u.user_id AND mp.module_id = $1
        WHERE r.role_name = 'employee' AND u.status = 'active'
        ORDER BY u.full_name`,
       [moduleRow.module_id]
@@ -91,6 +94,20 @@ router.post('/module/:id', async (req, res) => {
         [moduleRow.module_id, userId, req.user.userId]
       );
       added += 1;
+
+      // Tell the employee. A notification problem must never undo the assignment.
+      try {
+        await notify(query, {
+          userId,
+          moduleId: moduleRow.module_id,
+          kind: 'assignment',
+          title: 'New training assigned',
+          message: `You have been assigned "${moduleRow.title}".`,
+          createdBy: req.user.userId,
+        });
+      } catch (notifyErr) {
+        console.error('Assignment notification failed:', notifyErr.message);
+      }
     }
 
     res.json({ message: added === 1 ? 'Module assigned to 1 employee.' : `Module assigned to ${added} employees.`, added });
@@ -115,6 +132,37 @@ router.delete('/module/:id/user/:userId', async (req, res) => {
   } catch (err) {
     console.error('Unassign module error:', err);
     res.status(500).json({ error: 'Something went wrong removing the module.' });
+  }
+});
+
+// POST /api/assignments/module/:id/remind   body: { userIds?: [..] }
+// Sends an in-app reminder to assigned employees who have not finished the
+// module. Leave userIds out to remind everyone who is still unfinished.
+router.post('/module/:id/remind', async (req, res) => {
+  try {
+    const moduleRow = await loadManagedModule(req, res);
+    if (!moduleRow) return;
+
+    const userIds = Array.isArray(req.body.userIds) ? req.body.userIds : null;
+    const people = await unfinishedAssignees(query, moduleRow.module_id, userIds);
+    if (people.length === 0) {
+      return res.json({ sent: 0, skipped: 0, message: 'Nobody needs a reminder: everyone assigned has finished this module.' });
+    }
+
+    const { sent, skipped } = await sendManualReminders(query, {
+      moduleId: moduleRow.module_id,
+      moduleTitle: moduleRow.title,
+      people,
+      senderId: req.user.userId,
+      senderName: req.user.fullName || 'Your trainer',
+    });
+
+    const parts = [`Reminder sent to ${sent} ${sent === 1 ? 'employee' : 'employees'}.`];
+    if (skipped > 0) parts.push(`${skipped} already got one in the last 24 hours.`);
+    res.json({ sent, skipped, message: parts.join(' ') });
+  } catch (err) {
+    console.error('Remind error:', err);
+    res.status(500).json({ error: 'Something went wrong sending reminders.' });
   }
 });
 

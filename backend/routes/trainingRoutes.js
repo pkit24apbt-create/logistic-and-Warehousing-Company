@@ -232,7 +232,7 @@ router.post('/', verifyToken, requireRole(['administrator']), async (req, res) =
     );
 
     await query(
-      `INSERT INTO quizzes (module_id, passing_score, time_limit_sec) VALUES ($1, 70, 600)`,
+      `INSERT INTO quizzes (module_id, passing_score, time_limit_sec) VALUES ($1, 60, 600)`,
       [inserted.rows[0].module_id]
     );
 

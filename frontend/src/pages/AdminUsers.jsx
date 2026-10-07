@@ -78,6 +78,22 @@ export default function AdminUsers() {
     loadUsers();
   }
 
+  async function deleteUser(user) {
+    const ok = window.confirm(
+      `Permanently delete ${user.full_name} (${user.email})?\n\nThis cannot be undone. Accounts with training history cannot be deleted - deactivate those instead.`
+    );
+    if (!ok) return;
+    setError('');
+    setMessage('');
+    try {
+      const res = await axiosClient.delete(`/admin/users/${user.user_id}`);
+      setMessage(res.data.message);
+      loadUsers();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not delete the account.');
+    }
+  }
+
   async function changeRole(user, newRole) {
     if (newRole === user.role_name) return;
     if (!window.confirm(`Change ${user.full_name}'s role from ${user.role_name} to ${newRole}?`)) {
@@ -321,6 +337,7 @@ export default function AdminUsers() {
                   <th style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)' }}>Password</th>
                   <th style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)' }}></th>
                   <th style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)' }}></th>
+                  <th style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)' }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -373,6 +390,14 @@ export default function AdminUsers() {
                         style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}
                       >
                         {resettingId === u.user_id ? 'Resetting…' : 'Reset Password'}
+                      </button>
+                    </td>
+                    <td style={{ padding: 10, borderBottom: '1px solid var(--border)' }}>
+                      <button
+                        onClick={() => deleteUser(u)}
+                        style={{ background: 'transparent', border: '1px solid var(--danger)', color: 'var(--danger)', borderRadius: 6, padding: '5px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}
+                      >
+                        Delete
                       </button>
                     </td>
                   </tr>

@@ -35,7 +35,9 @@ export default function ChangePassword() {
 
     setSubmitting(true);
     try {
-      await axiosClient.post('/auth/change-password', { currentPassword, newPassword });
+      const res = await axiosClient.post('/auth/change-password', { currentPassword, newPassword });
+      // The server sends a fresh sign-in token without the password restriction.
+      if (res.data.token) localStorage.setItem('safestack_token', res.data.token);
       clearMustChangePassword();
       navigate(DASHBOARD_BY_ROLE[user.role] || '/login');
     } catch (err) {
