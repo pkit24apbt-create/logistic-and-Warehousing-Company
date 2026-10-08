@@ -5,8 +5,7 @@ const { verifyToken, requireRole } = require('../middleware/authMiddleware');
 const router = express.Router();
 
 // The 360 degree image shown in the Virtual Tour. It must be an equirectangular
-// panorama (2:1). This is the original warehouse photo.
-// To use the Blender render instead, change this to '/assets/photos/warehouse-360-blender.png'.
+// panorama (2:1). This is the real warehouse photo.
 const TOUR_IMAGE_URL = '/assets/photos/warehouse-360-preview.png';
 
 // GET /api/tour — the single shared warehouse tour, open to every
