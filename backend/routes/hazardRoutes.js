@@ -18,6 +18,9 @@ const P = require('../utils/puzzleScoring');
 //     measured by the server
 //   * attempts can be limited per rolling 24 hours (never a permanent lock-out)
 //   * steps / items are sent shuffled with random ids that reveal nothing
+//   * ORDER (sequence) puzzles show marks, score, best score and the right order
+//     ONLY when every step is correct (or in trainer preview). A partly right
+//     answer never shows any mark, even on the last attempt.
 
 const router = express.Router();
 
@@ -75,10 +78,15 @@ async function attemptsFor(scene, userId, now = new Date()) {
   return P.attemptsInfo({ maxAttempts: scene.max_attempts, attemptTimes: await attemptTimes(scene.scene_id, userId), now });
 }
 
-async function bestScore(sceneId, userId) {
+// The best score the learner is allowed to SEE. For ORDER puzzles a score is a
+// mark, so it is shown only once the puzzle has been solved completely (100).
+async function bestScore(sceneId, userId, puzzleType) {
   const r = await query('SELECT MAX(score) AS best FROM hazard_attempts WHERE scene_id = $1 AND user_id = $2', [sceneId, userId]);
   const v = r.rows[0] ? r.rows[0].best : null;
-  return v === null || v === undefined ? null : Number(v);
+  if (v === null || v === undefined) return null;
+  const score = Number(v);
+  if (puzzleType === 'sequence' && score < 100) return null;
+  return score;
 }
 
 async function itemCount(scene) {
@@ -144,7 +152,7 @@ router.get('/module/:moduleId/scenes', verifyToken, async (req, res) => {
         const info = await attemptsFor(row, req.user.userId, now);
         scene.attempts_left = info.left;
         scene.retry_at = info.retryAt;
-        scene.best_score = await bestScore(row.scene_id, req.user.userId);
+        scene.best_score = await bestScore(row.scene_id, req.user.userId, row.puzzle_type);
       }
       scenes.push(scene);
     }
@@ -192,7 +200,7 @@ router.get('/scene/:sceneId/play', verifyToken, async (req, res) => {
     };
     if (req.user.role === 'employee') {
       body.attempts = await attemptsFor(scene, req.user.userId);
-      body.best_score = await bestScore(scene.scene_id, req.user.userId);
+      body.best_score = await bestScore(scene.scene_id, req.user.userId, scene.puzzle_type);
     }
     res.json(body);
   } catch (err) {
@@ -349,9 +357,40 @@ router.post('/scene/:sceneId/submit', verifyToken, requireRole(['employee', 'tra
       attempts = await attemptsFor(scene, userId, now);
     }
 
+    const isSequence = type === 'sequence';
+
+    // ORDER puzzles: marks, score and the right order are shown ONLY when EVERY
+    // step is in the correct order. A partly right answer (2 or 3 steps right)
+    // shows no marks at all - not even on the last attempt. Only a trainer or
+    // administrator previewing the puzzle sees the full result.
+    const marksHidden = isSequence && !access.preview && outcome.score < 100;
+    if (marksHidden) {
+      return res.json({
+        puzzleType: type,
+        marksHidden: true,
+        score: null,
+        correctCount: null,
+        totalCount: outcome.totalCount,
+        wrongCount: null,
+        timedOut,
+        durationSec,
+        revealed: false,
+        preview: false,
+        attempts,
+        isModuleComplete,
+        details: {
+          steps: body.order.map((key) => ({ key, text: items.find((i) => i.item_key === key).item_text })),
+          correctOrder: null,
+        },
+      });
+    }
+
     // The right answers are revealed when they can no longer be used to cheat:
     // a perfect score, no attempts left, unlimited attempts, or a trainer preview.
-    const reveal = access.preview || outcome.score === 100 || attempts === null || attempts.unlimited || attempts.left === 0;
+    // (ORDER puzzles are only ever shown here with a perfect score or in preview.)
+    const reveal = isSequence
+      ? true
+      : (access.preview || outcome.score === 100 || attempts === null || attempts.unlimited || attempts.left === 0);
 
     let details = {};
     if (HUNT_TYPES.includes(type)) {
@@ -395,6 +434,7 @@ router.post('/scene/:sceneId/submit', verifyToken, requireRole(['employee', 'tra
 
     res.json({
       puzzleType: type,
+      marksHidden: false,
       score: outcome.score,
       correctCount: outcome.correctCount,
       totalCount: outcome.totalCount,

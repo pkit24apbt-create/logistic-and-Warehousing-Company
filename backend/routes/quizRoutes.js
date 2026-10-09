@@ -5,6 +5,30 @@ const { updateModuleCompletion } = require('../utils/moduleCompletion');
 
 const router = express.Router();
 
+// The client asked for: every level holds a pool of questions in the database (20),
+// but each attempt shows only 10 of them, picked at random, and a retake picks a
+// fresh random 10 from the same pool. A level with fewer than 10 questions simply
+// shows all of its questions.
+const QUESTIONS_PER_ATTEMPT = 10;
+
+// Remembers WHICH questions each employee was shown for a level, so the submit step
+// marks exactly those questions (and nothing the employee was not shown).
+let servedTableReady = false;
+async function ensureServedTable() {
+  if (servedTableReady) return;
+  await query(
+    `CREATE TABLE IF NOT EXISTS quiz_served (
+       user_id       INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+       quiz_id       INTEGER NOT NULL REFERENCES quizzes(quiz_id) ON DELETE CASCADE,
+       level         INTEGER NOT NULL,
+       question_ids  INTEGER[] NOT NULL,
+       served_at     TIMESTAMP NOT NULL DEFAULT NOW(),
+       PRIMARY KEY (user_id, quiz_id, level)
+     )`
+  );
+  servedTableReady = true;
+}
+
 // Fisher-Yates shuffle so the correct answer is not always in the same
 // position. Returns a new array and leaves the original untouched.
 function shuffle(items) {
@@ -63,7 +87,8 @@ router.get('/module/:moduleId/levels', verifyToken, async (req, res) => {
       previousPassed = passed;
       return {
         level: l.level,
-        questionCount: l.question_count,
+        questionCount: Math.min(Number(l.question_count), QUESTIONS_PER_ATTEMPT),
+        poolSize: Number(l.question_count),
         bestScore: attempt ? attempt.best_score : null,
         passed,
         unlocked,
@@ -87,8 +112,7 @@ router.get('/module/:moduleId/levels', verifyToken, async (req, res) => {
 
 // GET /api/quiz/module/:moduleId — returns ONE specific level's questions
 // (via ?level=N), WITHOUT revealing is_correct. Defaults to level 1 if not
-// specified. The answer options are shuffled on every load so the correct
-// answer is not always in the same position.
+// specified.
 router.get('/module/:moduleId', verifyToken, async (req, res) => {
   try {
     const { moduleId } = req.params;
@@ -108,9 +132,12 @@ router.get('/module/:moduleId', verifyToken, async (req, res) => {
     if (quizResult.rows.length === 0) return res.status(404).json({ error: 'No quiz found for this module.' });
     const quiz = quizResult.rows[0];
 
+    // Pick a fresh random set from the level's pool every time the level is opened.
     const questionsResult = await query(
-      'SELECT question_id, question_text, question_type, sort_order, difficulty, level FROM questions WHERE quiz_id = $1 AND level = $2 ORDER BY sort_order',
-      [quiz.quiz_id, level]
+      `SELECT question_id, question_text, question_type, sort_order, difficulty, level
+       FROM questions WHERE quiz_id = $1 AND level = $2
+       ORDER BY random() LIMIT $3`,
+      [quiz.quiz_id, level, QUESTIONS_PER_ATTEMPT]
     );
     const questions = questionsResult.rows;
     if (questions.length === 0) return res.status(404).json({ error: `No questions found for level ${level}.` });
@@ -120,7 +147,19 @@ router.get('/module/:moduleId', verifyToken, async (req, res) => {
       q.options = shuffle(optResult.rows);
     }
 
-    res.json({ ...quiz, level, questions });
+    // Remember what this employee was shown, so submitting marks exactly these questions.
+    if (req.user.role === 'employee') {
+      await ensureServedTable();
+      await query(
+        `INSERT INTO quiz_served (user_id, quiz_id, level, question_ids, served_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (user_id, quiz_id, level)
+         DO UPDATE SET question_ids = EXCLUDED.question_ids, served_at = NOW()`,
+        [req.user.userId, quiz.quiz_id, level, questions.map((q) => q.question_id)]
+      );
+    }
+
+    res.json({ ...quiz, level, questions, questionsPerAttempt: QUESTIONS_PER_ATTEMPT });
   } catch (err) {
     console.error('Get quiz error:', err);
     res.status(500).json({ error: 'Something went wrong loading the quiz.' });
@@ -204,7 +243,19 @@ router.post('/:quizId/submit', verifyToken, requireRole(['employee']), async (re
       return res.status(403).json({ error: 'This module has not been assigned to you.' });
     }
 
-    const questionsResult = await query('SELECT question_id FROM questions WHERE quiz_id = $1 AND level = $2', [quizId, level]);
+    // Mark exactly the questions this employee was shown when they opened the level.
+    await ensureServedTable();
+    const servedResult = await query(
+      'SELECT question_ids FROM quiz_served WHERE user_id = $1 AND quiz_id = $2 AND level = $3',
+      [userId, quizId, level]
+    );
+    if (servedResult.rows.length === 0) {
+      return res.status(400).json({ error: 'Please open this level again to get your questions, then submit.' });
+    }
+    const questionsResult = await query(
+      'SELECT question_id FROM questions WHERE quiz_id = $1 AND level = $2 AND question_id = ANY($3::int[])',
+      [quizId, level, servedResult.rows[0].question_ids]
+    );
     const questionIds = questionsResult.rows.map((r) => r.question_id);
     if (questionIds.length === 0) return res.status(400).json({ error: 'This level has no questions.' });
 

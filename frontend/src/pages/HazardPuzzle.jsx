@@ -13,6 +13,11 @@ import {
 // One page that plays every kind of puzzle:
 //   intro -> start (the server begins an attempt and starts the clock) -> play -> submit -> result
 // The right answers never reach this page until the server has scored the attempt.
+//
+// ORDER (sequence) puzzles: when not every step is in the right order, the server
+// sends result.marksHidden = true. Then NO score and NO marks are shown (not even
+// a "best score" on the start screen), only a "not quite right yet" message and a
+// Try again button.
 export default function HazardPuzzle() {
   const { sceneId } = useParams();
   const [scene, setScene] = useState(null);
@@ -117,6 +122,9 @@ export default function HazardPuzzle() {
   const type = scene.puzzle_type;
   const noAttemptsLeft = scene.attempts && !scene.attempts.unlimited && scene.attempts.left <= 0;
   const canRetry = !result || !result.attempts || result.attempts.unlimited || result.attempts.left > 0;
+  const marksHidden = phase === 'result' && result && result.marksHidden === true;
+  // ORDER puzzles: a best score is a mark, so it is shown only once the puzzle was solved completely.
+  const showBestScore = scene.best_score !== null && scene.best_score !== undefined && (type !== 'sequence' || scene.best_score === 100);
 
   const rules = isHunt(type)
     ? [
@@ -125,7 +133,11 @@ export default function HazardPuzzle() {
       'Critical hazards are worth more than minor ones.',
     ]
     : type === 'sequence'
-      ? ['You score for every step that is in the right order relative to the others.', 'Moving one step to the wrong place costs you just that step.']
+      ? [
+        'Put every step in the correct order.',
+        'Marks and your score are shown only when ALL the steps are in the correct order.',
+        'If even one step is in the wrong place, no marks are shown. Think again and try once more.',
+      ]
       : ['Each item is worth the same. Choose one category for every item.', 'You can change your answers as often as you like before you submit.'];
 
   const submitDisabled =
@@ -163,7 +175,7 @@ export default function HazardPuzzle() {
               {rules.map((r) => <li key={r}>{r}</li>)}
               {scene.time_limit_sec && <li><strong>Timed:</strong> you have {formatClock(scene.time_limit_sec)} once you press Start. When time runs out, your answer so far is submitted.</li>}
               <li>{attemptsLabel(scene.attempts) || (scene.max_attempts === 0 ? 'Unlimited attempts' : `${scene.max_attempts} attempts every 24 hours`)}.</li>
-              {scene.best_score !== null && scene.best_score !== undefined && <li>Your best score so far: <strong>{scene.best_score}%</strong>.</li>}
+              {showBestScore && <li>Your best score so far: <strong>{scene.best_score}%</strong>.</li>}
             </ul>
 
             {noAttemptsLeft && (
@@ -175,7 +187,7 @@ export default function HazardPuzzle() {
           </div>
         )}
 
-        {(phase === 'playing' || phase === 'result') && session && (
+        {(phase === 'playing' || phase === 'result') && session && !marksHidden && (
           <div className="card" style={{ maxWidth: isHunt(type) ? 1000 : 760, marginTop: 16 }} data-testid={phase === 'playing' ? 'playing' : 'reviewing'}>
             {phase === 'playing' && session.timeLimitSec && (
               <div style={{ marginBottom: 14 }} data-testid="timer">
@@ -209,7 +221,31 @@ export default function HazardPuzzle() {
           </div>
         )}
 
-        {phase === 'result' && result && (
+        {/* ORDER puzzle that is not fully correct: no score and no marks, just a clear message. */}
+        {marksHidden && (
+          <div className="card" style={{ maxWidth: 760, marginTop: 16 }} data-testid="marks-hidden">
+            <h2 style={{ margin: '0 0 8px' }}>Not quite right yet</h2>
+            <p className="dashboard-subtitle" style={{ margin: '0 0 12px' }}>
+              {result.timedOut
+                ? 'Time ran out before every step was in the correct order.'
+                : 'One or more of the steps is not in the correct order.'}
+              {' '}Marks and your score are shown only when <strong>all {result.totalCount} steps</strong> are in the correct order.
+            </p>
+            <p className="dashboard-subtitle" style={{ margin: '0 0 16px' }}>
+              Think about what must happen first, and try again.
+              {result.attempts && !result.attempts.unlimited ? ` ${attemptsLabel(result.attempts)}.` : ''}
+            </p>
+            {canRetry ? (
+              <button type="button" className="auth-btn-primary" style={{ width: 'auto', padding: '10px 28px' }} onClick={start} disabled={starting}>
+                {starting ? 'Starting…' : 'Try again'}
+              </button>
+            ) : (
+              <p className="auth-error" role="alert">You have used all your attempts for now. {result.attempts ? retryLabel(result.attempts.retryAt) : ''}</p>
+            )}
+          </div>
+        )}
+
+        {phase === 'result' && result && !marksHidden && (
           <PuzzleResult result={result} moduleId={scene.module_id} canRetry={canRetry} onRetry={start} />
         )}
       </main>

@@ -23,6 +23,16 @@ const COLOURS = {
   white: rgb(1, 1, 1),
 };
 
+// ---- who signs the certificates (change these two lines if needed) ----
+// Leave the name empty ('') to print only the title under the signature.
+const SIGNATORY_NAME = process.env.CERT_SIGNATORY_NAME || '';
+const SIGNATORY_TITLE = process.env.CERT_SIGNATORY_TITLE || 'Training Director';
+const INK_BLUE = hex('#1E3A8A');
+// The real handwritten signature, traced as a vector shape (viewBox 420 x 307).
+const SIGNATURE_W = 420;
+const SIGNATURE_H = 307;
+const SIGNATURE_PATH = 'M186 90 186 96 190 100 197 102 202 98 202 94 199 91 193 88 188 88ZM2 179 5 196 13 213 31 231 34 232 64 231 75 226 89 215 92 215 94 217 94 249 95 250 96 279 98 290 98 300 102 302 104 300 104 261 103 260 104 220 103 216 104 213 110 208 145 199 159 194 184 189 201 184 234 178 239 176 245 176 259 172 272 171 274 173 275 179 275 205 276 206 276 224 274 231 276 234 279 235 284 231 286 220 284 171 287 168 309 164 316 164 322 162 333 162 341 160 352 160 356 158 378 157 383 155 399 154 404 159 404 162 394 170 375 189 375 192 379 193 387 187 396 183 408 172 414 164 415 152 418 147 415 144 404 144 398 141 388 141 374 148 330 152 300 157 288 157 286 154 289 149 288 141 290 135 290 128 296 118 296 114 286 102 278 99 266 102 258 107 247 120 243 117 242 113 237 107 227 105 220 108 206 119 199 119 184 122 175 126 172 129 171 134 177 142 181 142 183 137 189 131 195 131 197 133 186 151 183 159 183 167 190 174 188 178 168 182 161 185 144 189 135 190 134 186 150 170 157 165 163 156 165 151 165 142 156 133 149 131 129 131 126 128 133 110 134 104 138 96 142 81 145 76 145 72 149 61 152 44 152 27 149 17 143 9 135 4 129 2 122 2 121 0 116 0 115 2 108 2 90 7 69 18 47 39 33 58 19 85 9 114 4 139 3 159 2 160ZM106 148 108 150 108 153 100 178 97 198 94 201 91 201 89 199 88 190 80 173 80 170 95 153 103 148ZM153 142 156 145 155 151 142 163 132 176 119 189 117 193 114 196 109 197 107 195 108 184 119 146 123 142 131 140 147 140ZM281 112 281 124 276 149 276 156 273 160 248 166 240 166 235 168 215 171 202 175 199 175 197 173 207 160 209 154 216 144 218 134 217 124 225 115 230 115 234 121 233 137 230 144 230 151 232 154 235 155 242 149 252 127 265 112 273 108 277 108ZM132 12 138 16 142 22 144 29 144 43 135 78 115 131 112 134 85 142 76 147 72 151 69 151 66 148 60 135 58 123 58 116 60 110 69 102 89 91 97 92 99 94 99 99 96 106 86 118 85 126 88 128 95 126 101 121 106 114 110 105 111 99 110 91 106 82 100 77 90 76 77 81 65 90 55 100 51 108 49 116 49 131 51 139 57 153 63 161 77 186 80 196 80 205 72 210 63 211 55 214 47 213 38 217 34 217 24 210 18 202 11 178 11 162 10 161 14 127 21 101 29 81 40 61 48 50 74 24 95 14 106 11 125 10Z';
+
 const LEVELS = {
   proficient: { label: 'Proficient', bg: hex('#DCFCE7'), fg: hex('#15803D') },
   competent: { label: 'Competent', bg: hex('#FEF3C7'), fg: hex('#B45309') },
@@ -56,6 +66,7 @@ async function buildCertificatePdf(cert) {
   const page = doc.addPage([W, H]);
   const cx = W / 2;
 
+  const times = await doc.embedFont(StandardFonts.TimesRoman);
   const timesBold = await doc.embedFont(StandardFonts.TimesRomanBold);
   const timesItalic = await doc.embedFont(StandardFonts.TimesRomanItalic);
   const timesBoldItalic = await doc.embedFont(StandardFonts.TimesRomanBoldItalic);
@@ -178,13 +189,22 @@ async function buildCertificatePdf(cert) {
   const rightX = W - 90;
   const sigW = 190;
 
-  // signature line (left)
+  // signature (left): the real handwritten signature sits on the line
+  const sigDrawH = 62;
+  const sigScale = sigDrawH / SIGNATURE_H;
+  const sigDrawW = SIGNATURE_W * sigScale;
+  page.drawSvgPath(SIGNATURE_PATH, {
+    x: leftX + sigW / 2 - sigDrawW / 2, y: baseY + sigDrawH + 3, scale: sigScale, color: INK_BLUE,
+  });
   page.drawLine({ start: { x: leftX, y: baseY }, end: { x: leftX + sigW, y: baseY }, thickness: 0.8, color: COLOURS.ink });
+  const printed = safe(SIGNATORY_NAME ? `${SIGNATORY_NAME}, ${SIGNATORY_TITLE}` : SIGNATORY_TITLE, sansBold);
+  const printedSize = fitted(printed, sansBold, 9, sigW + 20);
+  page.drawText(printed, { x: leftX + sigW / 2 - sansBold.widthOfTextAtSize(printed, printedSize) / 2, y: baseY - 13, size: printedSize, font: sansBold, color: COLOURS.ink });
   const sigLabel = 'Authorised signature';
-  page.drawText(sigLabel, { x: leftX + sigW / 2 - sans.widthOfTextAtSize(sigLabel, 9) / 2, y: baseY - 14, size: 9, font: sansBold, color: COLOURS.grey });
+  page.drawText(sigLabel, { x: leftX + sigW / 2 - sans.widthOfTextAtSize(sigLabel, 8) / 2, y: baseY - 24, size: 8, font: sans, color: COLOURS.grey });
   const sigOrg = safe(cert.organisation || 'Safestack Health and Safety Training', sans);
-  const sigOrgSize = fitted(sigOrg, sans, 8, sigW);
-  page.drawText(sigOrg, { x: leftX + sigW / 2 - sans.widthOfTextAtSize(sigOrg, sigOrgSize) / 2, y: baseY - 26, size: sigOrgSize, font: sans, color: COLOURS.muted });
+  const sigOrgSize = fitted(sigOrg, sans, 8, sigW + 20);
+  page.drawText(sigOrg, { x: leftX + sigW / 2 - sans.widthOfTextAtSize(sigOrg, sigOrgSize) / 2, y: baseY - 35, size: sigOrgSize, font: sans, color: COLOURS.muted });
 
   // date (right) - the issue date sits on the line, like a signed date
   const issued = formatDate(cert.issued_date);
